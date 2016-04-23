@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Jekyll语法高亮问题</title>
+  <meta name="description" content="Jekyll 的语法高亮在 Jekyll 3.0 以上默认使用的是 Rouge,如果使用的是 Jekyll 2, 需要在配置文件里面设置 highlighter 为 rouge, 并确保 rouge 被正确的安装了[表示此方法我没成功]另外, 就是使用 Pygments, 这个需要使用 Python 来安装如果你...">
+
+  <link rel="canonical" href="https://kernelmaker.github.io/2016/04/03/jekyll-syntax-highlight.html">
+
+  <link rel="stylesheet" href="/assets/css/bootstrap.min.css">
+  <!-- <link rel="stylesheet" href="/assets/css/icard_resume.css"> -->
+  <link rel="stylesheet" href="/assets/css/font-awesome.min.css">
+  <link rel="stylesheet" href="/assets/css/blog.css" >
+  <link rel="stylesheet" href="/assets/css/syntax.css">
+
+  <link rel="icon" type="image/png" href="/assets/img/avatar.jpeg">
+
+  <!-- Google fonts -->
+  <link rel='stylesheet' href='//fonts.googleapis.com/css?family=Open+Sans:300' type='text/css'>
+  <link rel='stylesheet' href='//fonts.googleapis.com/css?family=Source+Sans+Pro' type='text/css'>
+
+  <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+  <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+  <!--[if lt IE 9]>
+  <script src="assets/js/html5shiv.min.js"></script>
+  <script src="assets/js/respond.min.js"></script>
+  <![endif]-->
+
+</head>
+
+    <body>
+        <header class="bloghead">
+    <dev class="authorheader">
+        <a href="/">
+            <img alt="My Avatar" src="/assets/img/avatar.jpeg"/>
+        </a>
+        <dev class="blogtitle">
+            <h1><a href="/">KernelMaker</a></h1>
+            <h5> 墨鱼丸是只猫 </h5>
+        </dev>
+    </dev>
+
+    <nav class="menu" role="nav">
+        <ul>
+            <li><a href="/">Home</a></li>
+            <li>|</li>
+            <li><a href="/menu.html">Menu</a></li>
+            <li>|</li>
+            <li><a target="_blank" href="https://github.com/kernelmaker">Github</a></li>
+            <li>|</li>
+            <li><a target="_blank" href="/about.html"> About Me</a></li>
+        </ul>
+    </nav>
+</header>
+
+
+        <main class="blogmain">
+            <header>
+                <h1 class="article-title">Jekyll语法高亮问题</h1>
+                <p class="article-time">
+                    2016年04月03日 星期天,  发表于 <span>上海</span>
+                </p>
+                <p class="article-hint">
+                    如果你对本文有任何的建议或者疑问, 可以在
+                    <a href="https://github.com/kernelmaker/kernelmaker.github.io/issues" target="_blank">这里给我提 Issues</a>, 谢谢! :)
+                </p>
+            </header>
+            <p>Jekyll 的语法高亮在 Jekyll 3.0 以上默认使用的是 <a href="http://rouge.jneen.net/">Rouge</a>,
+如果使用的是 Jekyll 2, 需要在配置文件里面设置 <code class="highlighter-rouge">highlighter</code> 为 <code class="highlighter-rouge">rouge</code>,
+ 并确保 rouge 被正确的安装了</p>
+
+<p><strong>[表示此方法我没成功]</strong></p>
+
+<hr />
+
+<p>另外, 就是使用 <a href="http://pygments.org/">Pygments</a>, 这个需要使用 Python 来安装</p>
+
+<p>如果你不想麻烦, 可以直接使用我的这个 <a href="/assets/css/syntax.css">syntax.css</a>,
+ 这个就是最后使用 pygments 生成的默认的代码高亮 css 文件</p>
+
+<ul>
+  <li>
+    <p>把这个 syntax.css 放在 <code class="highlighter-rouge">/assets/css/syntax.css</code></p>
+  </li>
+  <li>
+    <p>在 <code class="highlighter-rouge">_include/head.html</code> 或者你自己的通用头文件里面添加 link</p>
+  </li>
+</ul>
+
+<div class="highlighter-rouge"><pre class="highlight"><code><span class="nt">&lt;link</span> <span class="na">rel=</span><span class="s">"stylesheet"</span> <span class="na">href=</span><span class="s">"/assets/css/highlight.css"</span><span class="nt">&gt;</span>
+</code></pre>
+</div>
+
+<ul>
+  <li>然后再 <code class="highlighter-rouge">_config.yml</code> 设置 <code class="highlighter-rouge">highlight: true</code></li>
+</ul>
+
+<h3 id="pygmentshttpspypipythonorgpypipygments">安装和使用 <a href="https://pypi.python.org/pypi/Pygments">Pygments</a></h3>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>pip install pygments
+</code></pre>
+</div>
+
+<p>安装完成后, 你需要用它来生成一个 css 文件, 放在你的 jekyll 项目中, 生成命令为</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>pygmentize -S default -f html &gt; style.css
+<span class="c"># 这个 -S 就是 style, 默认的style 为 firendly 具体得 style 可以参考 [Styles](http://pygments.org/docs/styles/)</span>
+</code></pre>
+</div>
+
+<p>这个 style.css 就是我们所需要的.
+详细的 Pygments 的使用请参考其 <a href="http://pygments.org/docs/">官方文档</a></p>
+
+<h3 id="ps---">PS -_-!!</h3>
+
+<h4 id="pythonhttpswwwpythonorg--piphttpspypipythonorgpypipipdownloads-"><a href="https://www.python.org">Python</a> 和 <a href="https://pypi.python.org/pypi/pip/#downloads">pip</a> 安装和使用</h4>
+
+<ul>
+  <li>
+    <p>下载安装 <a href="https://www.python.org/downloads">Python</a></p>
+  </li>
+  <li>
+    <p>将 Python 的安装路径加入到环境变量 path</p>
+  </li>
+  <li>
+    <p>下载 <a href="https://pypi.python.org/pypi/pip/#downloads">pip</a> 安装包, 解压后进入到其目录, 使用此命令安装</p>
+  </li>
+</ul>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>python setup.py install
+</code></pre>
+</div>
+
+<ul>
+  <li>完成安装后, 在把 Python 安装目录下的 scripts 目录也加入到环境变量 path 里面</li>
+</ul>
+
+<p>然后就可以用 pip 安装 Python 包了</p>
+
+            <footer class="article-footer">
+    <div class="authorimage">
+        <img src="/assets/img/avatar.jpeg" alt="My Avatar" class="img-circle">
+    </div>
+    <section class="author">
+        <h4><a href="/about.html">KernelMaker</a></h4>
+        <a href="mailto:songzhao.asm@icloud.com">songzhao.asm@icloud.com</a>
+    </section>
+</footer>
+
+        </main>
+
+        <div class="footer-copyright">
+    <div class="container-fluid">
+        <div class="row-fluid">
+            <div class="col-md-12">
+                Copyright &copy; 2016 KernelMaker - All rights reserved.
+            </div>
+        </div>
+    </div>
+</div>
+<script type="text/javascript" src="/assets/js/jquery.min.js"></script>
+<script type="text/javascript" src="/assets/js/bootstrap.min.js"></script>
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-74743250-2', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+    </body>
+
+</html>
