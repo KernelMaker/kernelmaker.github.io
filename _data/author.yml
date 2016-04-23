@@ -1,0 +1,42 @@
+# Author settings
+name: KernelMaker
+title: 基础架构
+address: 中国, 北京
+email: songzhao.asm@icloud.com
+github: kernelmaker
+gavatar: /assets/img/avatar.jpeg
+workHistory:
+
+- work1:
+  company: 奇虎360
+  location: 中国, 北京
+  title: 服务端开发-基础架构
+  started: 2014
+  duration: (2014.6 - Present)
+  description: 分布式存储Bada开发、大容量Redis开发
+
+educationHistory:
+- education1:
+  organization: 吉林大学
+  degree: 硕士
+  major: 计算机科学与技术
+  started: 2007
+  duration: (2007.9 - 2014.6)
+  description: 网络与信息安全、计算机系统结构
+languages:
+- language1:
+  name: 中文
+  proficiency: Native
+- language2:
+  name: English
+  proficiency: Limit
+programmingSkills:
+- CPP:
+  name: C/C++
+  percentage: 70%
+- Bash:
+  name: Bash Shell
+  percentage: 80%
+- PHP:
+  name: PHP
+  percentage: 30%

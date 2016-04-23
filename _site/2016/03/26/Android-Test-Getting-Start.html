@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Android Test 学习基础</title>
+  <meta name="description" content="开发安卓也有很长一段时间了，但是很少用到测试框架， 平时写用都靠打 log 进行调试和测试，运行的对不对，异常情况的处理，边界条件的处理，全靠自己的想象，写出来的代码和应用健壮性可想而知！所以学习测试框架是很有必要的一件事，虽然在公司可能很少会用到，因为你可能没有时间去写一个测试案例！其工作量不亚于实现一个应用功...">
+
+  <link rel="canonical" href="https://kernelmaker.github.io/2016/03/26/Android-Test-Getting-Start.html">
+
+  <link rel="stylesheet" href="/assets/css/bootstrap.min.css">
+  <!-- <link rel="stylesheet" href="/assets/css/icard_resume.css"> -->
+  <link rel="stylesheet" href="/assets/css/font-awesome.min.css">
+  <link rel="stylesheet" href="/assets/css/blog.css" >
+  <link rel="stylesheet" href="/assets/css/syntax.css">
+
+  <link rel="icon" type="image/png" href="/assets/img/avatar.jpeg">
+
+  <!-- Google fonts -->
+  <link rel='stylesheet' href='//fonts.googleapis.com/css?family=Open+Sans:300' type='text/css'>
+  <link rel='stylesheet' href='//fonts.googleapis.com/css?family=Source+Sans+Pro' type='text/css'>
+
+  <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+  <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+  <!--[if lt IE 9]>
+  <script src="assets/js/html5shiv.min.js"></script>
+  <script src="assets/js/respond.min.js"></script>
+  <![endif]-->
+
+</head>
+
+    <body>
+        <header class="bloghead">
+    <dev class="authorheader">
+        <a href="/">
+            <img alt="My Avatar" src="/assets/img/avatar.jpeg"/>
+        </a>
+        <dev class="blogtitle">
+            <h1><a href="/">KernelMaker</a></h1>
+            <h5> 墨鱼丸是只猫 </h5>
+        </dev>
+    </dev>
+
+    <nav class="menu" role="nav">
+        <ul>
+            <li><a href="/">Home</a></li>
+            <li>|</li>
+            <li><a href="/menu.html">Menu</a></li>
+            <li>|</li>
+            <li><a target="_blank" href="https://github.com/kernelmaker">Github</a></li>
+            <li>|</li>
+            <li><a target="_blank" href="/about.html"> About Me</a></li>
+        </ul>
+    </nav>
+</header>
+
+
+        <main class="blogmain">
+            <header>
+                <h1 class="article-title">Android Test 学习基础</h1>
+                <p class="article-time">
+                    2016年03月26日 星期六,  发表于 <span>上海</span>
+                </p>
+                <p class="article-hint">
+                    如果你对本文有任何的建议或者疑问, 可以在
+                    <a href="https://github.com/kernelmaker/kernelmaker.github.io/issues" target="_blank">这里给我提 Issues</a>, 谢谢! :)
+                </p>
+            </header>
+            <p>开发安卓也有很长一段时间了，但是很少用到测试框架， 平时写用都靠打 log 进行调试和测试，
+运行的对不对，异常情况的处理，边界条件的处理，全靠自己的想象，写出来的代码和应用健壮性可想而知！</p>
+
+<p>所以学习测试框架是很有必要的一件事，虽然在公司可能很少会用到，因为你可能没有时间去写一个测试案例！
+其工作量不亚于实现一个应用功能， 但是我觉得测试是对自己所写代码的一种负责！</p>
+
+<h2 id="section">基础</h2>
+
+<p>Android 的测试种类:</p>
+
+<ul>
+  <li><strong>Unit Test</strong> (单元测试)
+    <ul>
+      <li>
+        <p><strong>JUnit Test</strong></p>
+
+        <p>这个只能用来测试无关Android平台的功能代码, 只能在本地运行</p>
+      </li>
+      <li>
+        <p><strong>Instrumentation Unit Test</strong></p>
+
+        <p>这种单元测试运行在 Android 系统中, 这些测试可以获取到测试应用的上下文信息，用来测试有 Android API 的代码</p>
+      </li>
+    </ul>
+  </li>
+  <li><strong>Integration Tests</strong> (集成测试)
+    <ul>
+      <li>
+        <p><strong>Components within your app only</strong></p>
+
+        <p>这种类型的测试用来验证当用户进行了一个特定的操作或者特定的输入，目标应用的行为是否和预期一样。
+像 <code class="highlighter-rouge">Espresso</code> 这种UI测试框架就能允许你模拟用户的动作，能测试复杂的应用交互</p>
+      </li>
+      <li>
+        <p><strong>Cross-app Components</strong></p>
+
+        <p>这种测试就是用来验证多个不同的应用间或者 应用和系统应用间的正确交互</p>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<h2 id="android-studiojavakotlin">配置测试 (Android Studio/Java/Kotlin)</h2>
+
+<p>在 Android Studio 中 Junit Test 的默认的测试文件夹在 <code class="highlighter-rouge">src/test/java</code>, Instrumentation Test 的文件夹在<code class="highlighter-rouge">src/androidTest/java</code>
+也可以再 buid.gradle 里面重新设置目录，或者加入新的目录, 比如我想用 kotlin 来写单元测试</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code><span class="n">android</span> <span class="o">{</span>
+    <span class="n">sourceSets</span> <span class="o">{</span>
+        <span class="n">main</span><span class="o">.</span><span class="na">java</span><span class="o">.</span><span class="na">srcDirs</span> <span class="o">+=</span> <span class="s1">'src/main/kotlin'</span>
+        <span class="n">test</span><span class="o">.</span><span class="na">java</span><span class="o">.</span><span class="na">srcDirs</span> <span class="o">+=</span> <span class="s1">'src/test/kotlin'</span>
+        <span class="n">androidTest</span><span class="o">.</span><span class="na">java</span><span class="o">.</span><span class="na">srcDirs</span> <span class="o">+=</span> <span class="s1">'src/androidTest/kotlin'</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre>
+</div>
+
+<h2 id="junit-tests">JUnit Tests</h2>
+
+<p>JUnit Test 测试配置比较简单, 他的依赖只有一个, 使用的是 JUnit4</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code><span class="n">dependencies</span> <span class="o">{</span>
+    <span class="n">testCompile</span> <span class="s1">'junit:junit:4.12'</span>
+<span class="o">}</span>
+</code></pre>
+</div>
+<p>然后在 <code class="highlighter-rouge">src/test/xx.xx.xx/</code>新建一个 MainUnitTest.kt(名字随意)</p>
+
+<pre><code class="language-kotlin">class MainUnitTest {
+    @Test
+    fun testSample() {
+        println("hello")
+    }
+}
+</code></pre>
+
+<p>然后在菜单里点击 <code class="highlighter-rouge">buid</code> -&gt; <code class="highlighter-rouge">select build variants</code>, 在弹出的面板里面，选择<code class="highlighter-rouge">Test Artifact</code>为 <code class="highlighter-rouge">Unit Tests</code>,</p>
+
+<p>然后再 Project 面板里面，鼠标右击 MainUnitTest.kt, 在弹出的菜单中选择 run MainUnitTest,
+就可以运行MainUnitTest 里面所有的 @Test 声明的方法</p>
+
+<h2 id="instrumentation-tests">Instrumentation Tests</h2>
+
+<p>Instrumentation Tests 所需要依赖的东西就比较多一点</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code><span class="n">dependencies</span> <span class="o">{</span>
+    <span class="n">androidTestCompile</span> <span class="s1">'com.android.support.test:runner:0.4'</span>
+    <span class="n">androidTestCompile</span> <span class="s1">'com.android.support.test:rules:0.4'</span>
+    <span class="n">androidTestCompile</span> <span class="s1">'com.android.support.test.espresso:espresso-core:2.2.1'</span>
+    <span class="c1">// 这个需要应用的 api &gt; 18, 所以低api可以把它注释掉</span>
+    <span class="n">androidTestCompile</span> <span class="s1">'com.android.support.test.uiautomator:uiautomator-v18:2.1.2'</span>
+
+    <span class="c1">// 如果出现 (Warning:Conflict with dependency 'com.android.support:support-annotations'...)</span>
+    <span class="c1">// 这种警告可以添加这一条,</span>
+    <span class="n">androidTestCompile</span> <span class="s1">'com.android.support:support-annotations:23.1.0'</span>
+<span class="o">}</span>
+</code></pre>
+</div>
+
+<p>设置 <code class="highlighter-rouge">AndroidJUnitRunner</code> 作为默认的 test instrumentation runner, 配置 build.gradle</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code><span class="n">android</span> <span class="o">{</span>
+    <span class="n">defaultConfig</span> <span class="o">{</span>
+        <span class="n">testInstrumentationRunner</span> <span class="s2">"android.support.test.runner.AndroidJUnitRunner"</span>
+    <span class="o">}</span>
+<span class="o">}</span>
+</code></pre>
+</div>
+
+<p>在 <code class="highlighter-rouge">src/androidTest/XX.XX.XX</code> 下添加 MainActivtyTest.kt</p>
+
+<pre><code class="language-kotlin">class MainActivityTest : ActivityInstrumentationTestCase2&lt;MainActivity&gt;(MainActivity::class.java) {
+
+    @Before
+    public override fun setUp() {
+        super.setUp();
+
+        // Injecting the Instrumentation instance is required
+        // for your test to run with AndroidJUnitRunner.
+        injectInstrumentation(InstrumentationRegistry.getInstrumentation());
+    }
+
+    @Test
+    fun pressBackTwice() {
+        activity // getActivity()
+        // 测试连续两次点击返回是否退出应用
+        Espresso.pressBack()
+        Thread.sleep(1000)
+        Espresso.pressBack()
+    }
+
+    @After
+    public override fun tearDown(){
+        super.tearDown();
+    }
+}
+</code></pre>
+
+<p>然后在菜单里点击 <code class="highlighter-rouge">buid</code> -&gt; <code class="highlighter-rouge">select build variants</code>, 在弹出的面板里面，选择<code class="highlighter-rouge">Test Artifact</code>为 <code class="highlighter-rouge">Android Instrumentation Tests</code>,</p>
+
+<p>然后再 Project 面板里面，鼠标右击 MainUnitTest.kt, 在弹出的菜单中选择 run MainUnitTest,
+就可以运行MainUnitTest 里面所有的 @Test 声明的方法</p>
+
+<h2 id="section-1">其他</h2>
+<p>有一个简便的添加单元测试类的方法， 就是打开需要测试的类，在文件里面点击右键选择 <code class="highlighter-rouge">Go To</code> -&gt; <code class="highlighter-rouge">Test Subject</code>
+在弹出的对话框中选择 Junit4, 其他的选择随意，点击确定即可创建单元测试类，</p>
+
+<p><em>注意创建的单元测试类的位置是根据 build variants面板中所选择的 Test Artifact 来定的，
+即如果选择的 Unit Tests，则文件位置为 src/test/XX 下， 如果选择的 Instrumentation Tests
+则位置为 src/androidTest/XX 下</em></p>
+
+            <footer class="article-footer">
+    <div class="authorimage">
+        <img src="/assets/img/avatar.jpeg" alt="My Avatar" class="img-circle">
+    </div>
+    <section class="author">
+        <h4><a href="/about.html">KernelMaker</a></h4>
+        <a href="mailto:songzhao.asm@icloud.com">songzhao.asm@icloud.com</a>
+    </section>
+</footer>
+
+        </main>
+
+        <div class="footer-copyright">
+    <div class="container-fluid">
+        <div class="row-fluid">
+            <div class="col-md-12">
+                Copyright &copy; 2016 KernelMaker - All rights reserved.
+            </div>
+        </div>
+    </div>
+</div>
+<script type="text/javascript" src="/assets/js/jquery.min.js"></script>
+<script type="text/javascript" src="/assets/js/bootstrap.min.js"></script>
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-74743250-2', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+    </body>
+
+</html>
