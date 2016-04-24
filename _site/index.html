@@ -64,6 +64,29 @@
 <article class="preview">
     <header>
         <h2 class="post-title">
+            <a href="/2016/04/24/TCMalloc-2-PageHeap.html">  TCMalloc源码学习-2-PageHeap </a>
+        </h2>
+        <p class="post-time"> 2016年04月24日 星期日</p>
+    </header>
+    <section class="post-section">
+        <p>
+            <p>这一篇主要是从TCMalloc最下层的内存管理模块入手，介绍一下PageHeap的实现。TCMalloc无论自己怎么管理内存，这些内存肯定都是要通过向操作系统来申请的，那么什么时候申请呢？申请到的内存该怎么管理呢？什么时候还给操作系统呢？这些就是PageHeap要做的事情啦。我们以32位系统为例，详细介绍一下。</p>
+
+
+        </p>
+        <p class="readmore">
+            <a href="/2016/04/24/TCMalloc-2-PageHeap.html">
+                阅读全文
+                <span class="glyphicon glyphicon-circle-arrow-right"></span>
+            </a>
+        </p>
+    </section>
+
+</article>
+
+<article class="preview">
+    <header>
+        <h2 class="post-title">
             <a href="/2016/04/23/TCMalloc-1-Introduction.html">  TCMalloc源码学习-1-介绍 </a>
         </h2>
         <p class="post-time"> 2016年04月23日 星期六</p>
