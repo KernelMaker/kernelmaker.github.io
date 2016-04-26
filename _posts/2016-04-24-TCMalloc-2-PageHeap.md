@@ -3,7 +3,7 @@ layout: post_layout
 title: TCMalloc源码学习-2-PageHeap
 time: 2016年04月24日 星期日
 location: 北京
-pulished: true
+published: true
 excerpt_separator: "##"
 ---
 

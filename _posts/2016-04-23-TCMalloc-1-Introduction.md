@@ -3,7 +3,7 @@ layout: post_layout
 title: TCMalloc源码学习-1-介绍
 time: 2016年04月23日 星期六
 location: 北京
-pulished: true
+published: true
 excerpt_separator: "##"
 ---
 
