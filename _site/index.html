@@ -64,6 +64,29 @@
 <article class="preview">
     <header>
         <h2 class="post-title">
+            <a href="/2016/05/03/TimingWheel.html">  Timing Wheel </a>
+        </h2>
+        <p class="post-time"> 2016年05月03日 星期二</p>
+    </header>
+    <section class="post-section">
+        <p>
+            <p>不管是之前做的Bada还是最近在做的Pika，只要是服务端，都面临一个问题：如何有效清除长时间不活动的客户端连接？这个还是很有必要的，现实中保不齐就有用客户端连上服务器后什么都不做，“占着茅坑不拉屎”的现象，其实解决办法很简单，就是对每个客户端的最后请求时间做记录然后定时检查，超过设定时间就关闭连接就可以了，不管是bada，pika，还是redis，实现都很简单，都是在cron里做定期扫描，无意中发现了时间轮盘（Timing Wheel），原理也不难，不过感觉实现起来挺好玩的，以后没准也会把它用在pika中</p>
+
+
+        </p>
+        <p class="readmore">
+            <a href="/2016/05/03/TimingWheel.html">
+                阅读全文
+                <span class="glyphicon glyphicon-circle-arrow-right"></span>
+            </a>
+        </p>
+    </section>
+
+</article>
+
+<article class="preview">
+    <header>
+        <h2 class="post-title">
             <a href="/2016/04/28/TCMalloc-5-Summary.html">  TCMalloc源码学习-5-总结 </a>
         </h2>
         <p class="post-time"> 2016年04月28日 星期四</p>

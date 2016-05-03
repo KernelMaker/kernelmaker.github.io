@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Timing Wheel</title>
+  <meta name="description" content="不管是之前做的Bada还是最近在做的Pika，只要是服务端，都面临一个问题：如何有效清除长时间不活动的客户端连接？这个还是很有必要的，现实中保不齐就有用客户端连上服务器后什么都不做，“占着茅坑不拉屎”的现象，其实解决办法很简单，就是对每个客户端的最后请求时间做记录然后定时检查，超过设定时间就关闭连接就可以了，不管...">
+
+  <link rel="canonical" href="https://kernelmaker.github.io/2016/05/03/TimingWheel.html">
+
+  <link rel="stylesheet" href="/assets/css/bootstrap.min.css">
+  <!-- <link rel="stylesheet" href="/assets/css/icard_resume.css"> -->
+  <link rel="stylesheet" href="/assets/css/font-awesome.min.css">
+  <link rel="stylesheet" href="/assets/css/blog.css" >
+  <link rel="stylesheet" href="/assets/css/syntax.css">
+
+  <link rel="icon" type="image/png" href="/assets/img/avatar.jpeg">
+
+  <!-- Google fonts -->
+  <link rel='stylesheet' href='//fonts.googleapis.com/css?family=Open+Sans:300' type='text/css'>
+  <link rel='stylesheet' href='//fonts.googleapis.com/css?family=Source+Sans+Pro' type='text/css'>
+
+  <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+  <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+  <!--[if lt IE 9]>
+  <script src="assets/js/html5shiv.min.js"></script>
+  <script src="assets/js/respond.min.js"></script>
+  <![endif]-->
+
+</head>
+
+    <body>
+        <header class="bloghead">
+    <dev class="authorheader">
+        <a href="/">
+            <img alt="My Avatar" src="/assets/img/avatar.jpeg"/>
+        </a>
+        <dev class="blogtitle">
+            <h1><a href="/">KernelMaker</a></h1>
+            <h5> 墨鱼丸是只猫 </h5>
+        </dev>
+    </dev>
+
+    <nav class="menu" role="nav">
+        <ul>
+            <li><a href="/">Home</a></li>
+            <li>|</li>
+            <li><a href="/menu.html">Menu</a></li>
+            <li>|</li>
+            <li><a target="_blank" href="https://github.com/kernelmaker">Github</a></li>
+            <li>|</li>
+            <li><a target="_blank" href="/about.html"> About Me</a></li>
+        </ul>
+    </nav>
+</header>
+
+
+        <main class="blogmain">
+            <header>
+                <h1 class="article-title">Timing Wheel</h1>
+                <p class="article-time">
+                    2016年05月03日 星期二,  发表于 <span>北京</span>
+                </p>
+                <p class="article-hint">
+                    如果您对本文有任何的建议或者疑问, 可以下方留言或者在
+                    <a href="https://github.com/kernelmaker/kernelmaker.github.io/issues" target="_blank">这里给我提 Issues</a>, 谢谢! :)
+                </p>
+            </header>
+            <p>不管是之前做的Bada还是最近在做的Pika，只要是服务端，都面临一个问题：如何有效清除长时间不活动的客户端连接？这个还是很有必要的，现实中保不齐就有用客户端连上服务器后什么都不做，“占着茅坑不拉屎”的现象，其实解决办法很简单，就是对每个客户端的最后请求时间做记录然后定时检查，超过设定时间就关闭连接就可以了，不管是bada，pika，还是redis，实现都很简单，都是在cron里做定期扫描，无意中发现了时间轮盘（Timing Wheel），原理也不难，不过感觉实现起来挺好玩的，以后没准也会把它用在pika中</p>
+
+<h2 id="section">原理</h2>
+
+<p>除了之前说的，对每个客户端的最后访问时间做记录然后定期扫描的办法，有没有什么不记录时间，超时后自动淘汰的办法呢？有！首先有一个定长队列，队列长度和设定的超时时间一样，加入超时时间是10s，那么队列长度就是10，每次从队尾插入一个新成员的时候，淘汰对头的成员，是不是感觉有点接近了？没错，队列的每个成员是一个链表的head指针，链表的每个节点就是对应每个客户端的Conn对象，假如有新的连接过来，accept线程构造好一个Conn对象，将它插入到队列尾的链表中，代表还有10s过期，然后，没过1s，就在队尾插入新的空head指针，删除对头被顶出来的链表（关闭超时客户端连接），加入在2s的链表中，有一个客户端来了新的请求，就将他从2s的链表中摘出来，插入到10s的链表，这样也就刷新了超时时间，通过这样的结构实现了超时客户端的淘汰</p>
+
+<h2 id="section-1">实现</h2>
+
+<p>上一节说的原理很简单，不过实现起来的方式有很多的，结合C++的<code class="highlighter-rouge">shared_ptr</code>和<code class="highlighter-rouge">weak_ptr</code>，可以很好地实现Timing Wheel，如下图：</p>
+
+<p><img src="/assets/img/2016-05-03/TimingWheel-pic1.png" width="400px" /></p>
+
+<p>链表中的每个节点并不是实际Conn对象，而是一个指向Entry的<code class="highlighter-rouge">shared_ptr</code>，暂且称为EntryPtr，那么什么是Entry呢，他是和Conn相伴相生的struct，结构非常简单，仅包含一个指向Conn对象的<code class="highlighter-rouge">weak_ptr</code>，另外Conn中还要有一个指向Entry的<code class="highlighter-rouge">weak_ptr</code>，举个例子，假设在1s链表中，有一个Conn来了新请求，现在需要将它从1s链表移动到10s链表中，怎么做呢？首先Conn中有指向Entry的<code class="highlighter-rouge">weak_ptr</code>，将它提升成为<code class="highlighter-rouge">shared_ptr</code>，此时指向这个Entry的shared_ptr的引用计数为2，一个是1s链表中已经存在的EntryPtr，一个是刚刚从<code class="highlighter-rouge">weak_ptr</code>提升而来，然后将提升得到的<code class="highlighter-rouge">shared_ptr</code>插入到10s链表里就可以了，注意，此时虽然1s链表中那个指向Entry的<code class="highlighter-rouge">shared_ptr</code>还在，不过不会有影响，为什么呢？假如又一秒过去，刚才的1s链表被推出，整体淘汰，那么在析构这个shared_ptr指向的Entry是，发现此时引用计数为2，所以不会析构Entry，仅仅是将<code class="highlighter-rouge">shared_ptr</code>的引用计数减1，直到刚才10s链表析构的时候才会真正析构Entry，在Entry析构时才会真正析构Conn，为什么Conn指向Entry的一定要是<code class="highlighter-rouge">weak_ptr</code>呢？很简单，如果是<code class="highlighter-rouge">shared_ptr</code>的话，那么引用计数永远不可能为0，这个Entry永远不会被析构的。</p>
+
+<h2 id="section-2">总结</h2>
+
+<p>有一个问题需要思考一下：为什么Entry中指向Conn的指针是<code class="highlighter-rouge">weak_ptr</code>呢？如果用普通指针会有什么问题？</p>
+
+<p>本篇Timing Wheel的实现还是挺有意思的，也算是的<code class="highlighter-rouge">shared_ptr</code>和<code class="highlighter-rouge">weak_ptr</code>的典型用法，值得学习</p>
+
+<p>Ps：昨天在哈尔滨办完女方新婚答谢宴，今天和媳妇在一起7周年，还挺有纪念意义的，哈哈哈~~~</p>
+
+            <footer class="article-footer">
+    <div class="authorimage">
+        <img src="/assets/img/avatar.jpeg" alt="My Avatar" class="img-circle">
+    </div>
+    <section class="author">
+        <h4><a href="/about.html">KernelMaker</a></h4>
+        <a href="mailto:songzhao.asm@icloud.com">songzhao.asm@icloud.com</a>
+    </section>
+</footer>
+
+            <div id="disqus_thread"></div>
+<script>
+/**
+* RECOMMENDED CONFIGURATION VARIABLES: EDIT AND UNCOMMENT THE SECTION BELOW TO INSERT DYNAMIC VALUES FROM YOUR PLATFORM OR CMS.
+* LEARN WHY DEFINING THESE VARIABLES IS IMPORTANT: https://disqus.com/admin/universalcode/#configuration-variables
+*/
+/*
+var disqus_config = function () {
+this.page.url = PAGE_URL; // Replace PAGE_URL with your page's canonical URL variable
+this.page.identifier = PAGE_IDENTIFIER; // Replace PAGE_IDENTIFIER with your page's unique identifier variable
+};
+*/
+(function() { // DON'T EDIT BELOW THIS LINE
+var d = document, s = d.createElement('script');
+
+s.src = '//kernelmaker.disqus.com/embed.js';
+
+s.setAttribute('data-timestamp', +new Date());
+(d.head || d.body).appendChild(s);
+})();
+</script>
+<noscript>Please enable JavaScript to view the <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments powered by Disqus.</a></noscript>
+
+        </main>
+
+        <div class="footer-copyright">
+    <div class="container-fluid">
+        <div class="row-fluid">
+            <div class="col-md-12">
+                Copyright &copy; 2016 KernelMaker - All rights reserved.
+            </div>
+        </div>
+    </div>
+</div>
+<script type="text/javascript" src="/assets/js/jquery.min.js"></script>
+<script type="text/javascript" src="/assets/js/bootstrap.min.js"></script>
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-77075031-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+    </body>
+
+</html>
