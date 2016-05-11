@@ -39,7 +39,8 @@ typedef struct redisObject {
 ```
 每个robj占用((4b(type)+4b(encoding)+24b(lru))/8)+4(refcount)+8(ptr) = 16字节，ptr指向所存内容，以"aaa"为例，包成sds占用12字节，再包成robj，实际占用16+12 = 28字节，其中ptr指向sds，所以对字符串的robj的内存占用公式可以总结为"N+9+16"，N为字符串长度
 
-_注:_ robj的ptr并不总是保存实际内容，假设字符为"123"，当然type为`REDIS_STRING`，redis会在tryObjectEncoding函数中判断robj的ptr指向的sds能不能转化成整数，假如可以，那么而直接将ptr的值赋为123，并释放之前的sds，此时encoding为`REDIS_ENCODING_INT`表明这个ptr保存的是一个整数，所以实际占用仅为一个robj的大小，即16字节
+_**注:**_ robj的ptr并不总是保存实际内容，假设字符为"123"，当然type为`REDIS_STRING`，redis会在tryObjectEncoding函数中判断robj的ptr指向的sds能不能转化成整数，假如可以，那么而直接将ptr的值赋为123，并释放之前的sds，此时encoding为`REDIS_ENCODING_INT`表明这个ptr保存的是一个整数，所以实际占用仅为一个robj的大小，即16字节
+
 ## 计算
 
 对sds有了初步了解之后，我们就可以开始计算了，当redis接收到客户端"set aaa bbb"命令之后，
@@ -69,7 +70,7 @@ robj *createObject(int type, void *ptr) {
 ```cpp
 c->argv[2] = tryObjectEncoding(c->argv[2]);
 ```
-这里会对命令中的value进行上面说的tryObjectEncoding，此处argv[2]是包含"bbb"的robj，所以这里tryObjectEncoding后，这个robj不会变小，但如果此处是包含"123"的robj，那么经过tryObjectEncoding后，大小会从28变为16(具体原因参考上一节 _注_ 部分)
+这里会对命令中的value进行上面说的tryObjectEncoding，此处argv[2]是包含"bbb"的robj，所以这里tryObjectEncoding后，这个robj不会变小，但如果此处是包含"123"的robj，那么经过tryObjectEncoding后，大小会从28变为16(具体原因参考Object一节 _**注**_ 部分)
 
 接着往下看，setKey的定义如下：
 

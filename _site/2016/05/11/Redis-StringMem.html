@@ -101,8 +101,9 @@
 </div>
 <p>每个robj占用((4b(type)+4b(encoding)+24b(lru))/8)+4(refcount)+8(ptr) = 16字节，ptr指向所存内容，以”aaa”为例，包成sds占用12字节，再包成robj，实际占用16+12 = 28字节，其中ptr指向sds，所以对字符串的robj的内存占用公式可以总结为”N+9+16”，N为字符串长度</p>
 
-<p><em>注:</em> robj的ptr并不总是保存实际内容，假设字符为”123”，当然type为<code class="highlighter-rouge">REDIS_STRING</code>，redis会在tryObjectEncoding函数中判断robj的ptr指向的sds能不能转化成整数，假如可以，那么而直接将ptr的值赋为123，并释放之前的sds，此时encoding为<code class="highlighter-rouge">REDIS_ENCODING_INT</code>表明这个ptr保存的是一个整数，所以实际占用仅为一个robj的大小，即16字节
-## 计算</p>
+<p><em><strong>注:</strong></em> robj的ptr并不总是保存实际内容，假设字符为”123”，当然type为<code class="highlighter-rouge">REDIS_STRING</code>，redis会在tryObjectEncoding函数中判断robj的ptr指向的sds能不能转化成整数，假如可以，那么而直接将ptr的值赋为123，并释放之前的sds，此时encoding为<code class="highlighter-rouge">REDIS_ENCODING_INT</code>表明这个ptr保存的是一个整数，所以实际占用仅为一个robj的大小，即16字节</p>
+
+<h2 id="section">计算</h2>
 
 <p>对sds有了初步了解之后，我们就可以开始计算了，当redis接收到客户端”set aaa bbb”命令之后，</p>
 
@@ -130,7 +131,7 @@
 <div class="highlighter-rouge"><pre class="highlight"><code><span class="n">c</span><span class="o">-&gt;</span><span class="n">argv</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">tryObjectEncoding</span><span class="p">(</span><span class="n">c</span><span class="o">-&gt;</span><span class="n">argv</span><span class="p">[</span><span class="mi">2</span><span class="p">]);</span>
 </code></pre>
 </div>
-<p>这里会对命令中的value进行上面说的tryObjectEncoding，此处argv[2]是包含”bbb”的robj，所以这里tryObjectEncoding后，这个robj不会变小，但如果此处是包含”123”的robj，那么经过tryObjectEncoding后，大小会从28变为16(具体原因参考上一节 <em>注</em> 部分)</p>
+<p>这里会对命令中的value进行上面说的tryObjectEncoding，此处argv[2]是包含”bbb”的robj，所以这里tryObjectEncoding后，这个robj不会变小，但如果此处是包含”123”的robj，那么经过tryObjectEncoding后，大小会从28变为16(具体原因参考Object一节 <em><strong>注</strong></em> 部分)</p>
 
 <p>接着往下看，setKey的定义如下：</p>
 
@@ -208,14 +209,14 @@
 </div>
 <p>一个dictEntry的大小是8(key)+8(v)+8(next) = 24字节，key是一个指向包含”aaa”的robj指针，v是一个指向包含”bbb”的robj的指针，next是指向对应桶中第二个dictEntry的指针</p>
 
-<h2 id="section">结论</h2>
+<h2 id="section-1">结论</h2>
 <ul>
   <li>在执行”set aaa bbb”命令后，redis会用24(dictEntry)+28(robj(“aaa”))+28(robj(“bbb”)) = 80字节来存储</li>
   <li>在执行”set aaa 123”命令后，redis会用24(dictEntry)+28(robj(“aaa”))+16(robj(“bbb”)) = 68字节来存储</li>
   <li>上面说的80和68只是redis申请的字节数，实际占用还要根据具体allocator来看，感兴趣的话可以参考我的”TCMalloc”系列来进一步阅读^^</li>
 </ul>
 
-<h2 id="section-1">补充</h2>
+<h2 id="section-2">补充</h2>
 <p>在第一步协议解析之后，redis会对每个参数生成对应的robj并且存储在redisClient的argv中，执行完命令之后会调用resetClient来释放这个argv中的每个robj，那岂不是那些被存在dictEntry的robj都被释放了？其实不会，先看resetClient实现：</p>
 
 <div class="highlighter-rouge"><pre class="highlight"><code><span class="kt">void</span> <span class="nf">resetClient</span><span class="p">(</span><span class="n">redisClient</span> <span class="o">*</span><span class="n">c</span><span class="p">)</span> <span class="p">{</span>
@@ -265,7 +266,7 @@
 
 <p>好了，这些细节其实对本篇的主题理解无影响，不过细扣这些可以让我们更加深刻的理解redis，还是很有必要的，也许这是在给我的强迫症找借口，O(∩_∩)O哈哈~</p>
 
-<h2 id="section-2">总结</h2>
+<h2 id="section-3">总结</h2>
 <p>这篇讲的东西切入点很小，平时大伙有可能都忽略它的存在，不过学习这些细节也会很有收获的，至少我觉得是个好习惯^^</p>
 
             <footer class="article-footer">
