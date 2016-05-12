@@ -212,7 +212,7 @@
 <h2 id="section-1">结论</h2>
 <ul>
   <li>在执行”set aaa bbb”命令后，redis会用24(dictEntry)+28(robj(“aaa”))+28(robj(“bbb”)) = 80字节来存储</li>
-  <li>在执行”set aaa 123”命令后，redis会用24(dictEntry)+28(robj(“aaa”))+16(robj(“bbb”)) = 68字节来存储</li>
+  <li>在执行”set aaa 10000”命令后，redis会用24(dictEntry)+28(robj(“aaa”))+16(robj(“10000”)) = 68字节来存储（redis对整数10000之内robj创建了shared object，也就是说如果这里不是10000而是123的话，不会为123新创建robj而是直接增加shared object中已有123的robj的计数，这样空间占用更小）</li>
   <li>上面说的80和68只是redis申请的字节数，实际占用还要根据具体allocator来看，感兴趣的话可以参考我的”TCMalloc”系列来进一步阅读^^</li>
 </ul>
 
