@@ -13,16 +13,23 @@ workHistory:
   title: 服务端开发-基础架构
   started: 2014
   duration: (2014.6 - Present)
-  description: 分布式存储Bada开发、大容量Redis开发
+  description: 负责分布式存储Bada开发及Pika(大容量Redis)的开发
 
 educationHistory:
 - education1:
   organization: 吉林大学
   degree: 硕士
+  major: 计算机系统结构
+  started: 2011
+  duration: (2011.9 - 2014.6)
+  description: 计算机系统结构
+- education2:
+  organization: 吉林大学
+  degree: 硕士
   major: 计算机科学与技术
   started: 2007
-  duration: (2007.9 - 2014.6)
-  description: 网络与信息安全、计算机系统结构
+  duration: (2007.9 - 2011.6)
+  description: 网络与信息安全
 languages:
 - language1:
   name: 中文
