@@ -64,6 +64,29 @@
 <article class="preview">
     <header>
         <h2 class="post-title">
+            <a href="/2016/05/20/Leveldb_Put.html">  Leveldb之Put实现 </a>
+        </h2>
+        <p class="post-time"> 2016年05月20日 星期五</p>
+    </header>
+    <section class="post-section">
+        <p>
+            <p>这一篇主要总结一下leveldb put接口的实现，put接口用来向leveldb写入数据，leveldb的写入速度很快，主要因为它将随机写转化为顺序写，一个写入操作会首先在log文件中顺序写oplog，然后在内存的memtable中插入该数据就可返回，它的整体实现不难，逻辑也很清晰，这里做一下</p>
+
+
+        </p>
+        <p class="readmore">
+            <a href="/2016/05/20/Leveldb_Put.html">
+                阅读全文
+                <span class="glyphicon glyphicon-circle-arrow-right"></span>
+            </a>
+        </p>
+    </section>
+
+</article>
+
+<article class="preview">
+    <header>
+        <h2 class="post-title">
             <a href="/2016/05/15/Leveldb_Iterator.html">  Leveldb之Iterator总结 </a>
         </h2>
         <p class="post-time"> 2016年05月15日 星期日</p>
