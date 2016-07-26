@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Leveldb之对LRUCache优化</title>
+  <meta name="description" content="昨天看到leveldb近期内有一条commit：fix problems in LevelDB's caching code，话说之前自己有一篇博客总结了leveldb cache的实现，既然这次它有了这方面的更新，那么就接着写一篇，总结一下cache方面的更新吧">
+
+  <link rel="canonical" href="https://kernelmaker.github.io/2016/07/26/Leveldb_LRUCache_Optimize.html">
+
+  <link rel="stylesheet" href="/assets/css/bootstrap.min.css">
+  <!-- <link rel="stylesheet" href="/assets/css/icard_resume.css"> -->
+  <link rel="stylesheet" href="/assets/css/font-awesome.min.css">
+  <link rel="stylesheet" href="/assets/css/blog.css" >
+  <link rel="stylesheet" href="/assets/css/syntax.css">
+
+  <link rel="icon" type="image/png" href="/assets/img/avatar.jpeg">
+
+  <!-- Google fonts -->
+  <link rel='stylesheet' href='//fonts.googleapis.com/css?family=Open+Sans:300' type='text/css'>
+  <link rel='stylesheet' href='//fonts.googleapis.com/css?family=Source+Sans+Pro' type='text/css'>
+
+  <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+  <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+  <!--[if lt IE 9]>
+  <script src="assets/js/html5shiv.min.js"></script>
+  <script src="assets/js/respond.min.js"></script>
+  <![endif]-->
+
+</head>
+
+    <body>
+        <header class="bloghead">
+    <dev class="authorheader">
+        <a href="/">
+            <img alt="My Avatar" src="/assets/img/avatar.jpeg"/>
+        </a>
+        <dev class="blogtitle">
+            <h1><a href="/">KernelMaker</a></h1>
+            <h5> 墨鱼丸是只猫 </h5>
+        </dev>
+    </dev>
+
+    <nav class="menu" role="nav">
+        <ul>
+            <li><a href="/">Home</a></li>
+            <li>|</li>
+            <li><a href="/menu.html">Menu</a></li>
+            <li>|</li>
+            <li><a target="_blank" href="https://github.com/kernelmaker">Github</a></li>
+            <li>|</li>
+            <li><a target="_blank" href="/about.html"> About Me</a></li>
+        </ul>
+    </nav>
+</header>
+
+
+        <main class="blogmain">
+            <header>
+                <h1 class="article-title">Leveldb之对LRUCache优化</h1>
+                <p class="article-time">
+                    2016年07月26日 星期二,  发表于 <span>北京</span>
+                </p>
+                <p class="article-hint">
+                    如果您对本文有任何的建议或者疑问, 可以下方留言或者在
+                    <a href="https://github.com/kernelmaker/kernelmaker.github.io/issues" target="_blank">这里给我提 Issues</a>, 谢谢! :)
+                </p>
+            </header>
+            <p>昨天看到leveldb近期内有一条commit：<code class="highlighter-rouge">fix problems in LevelDB's caching code</code>，话说之前自己有一篇博客总结了leveldb cache的实现，既然这次它有了这方面的更新，那么就接着写一篇，总结一下cache方面的更新吧</p>
+
+<h2 id="section">回顾</h2>
+<p>这个是自己之前总结的leveldb cache的实现：<a href="http://kernelmaker.github.io/2016/05/09/Leveldb_LRUCache.html">传送门</a></p>
+
+<h2 id="cache">原有cache的问题：</h2>
+
+<p>首先看一下官方如何描原有cache存在的问题：</p>
+
+<h3 id="the-observed-behaviour">The observed behaviour</h3>
+
+<p>If LevelDB at any time used more file handles concurrently than
+the cache size set via <code class="highlighter-rouge">max_open_files</code>, it attempted to reduce the
+number by evicting entries from the table cache.  This could
+happen most easily during compaction, and if <code class="highlighter-rouge">max_open_files</code> was
+low.  Because the handles were in use, their reference count did
+not drop to zero, and so the usage sum in the cache was not
+modified by the evictions.  Subsequent Insert() calls returned
+valid handles, but their entries were immediately evicted from
+the cache, which though empty still acted as though full.  As a
+result, there was effectively no caching, and the number of open
+file handles rose []ly until it hit system-imposed limits and
+the process died.</p>
+
+<p>If one set <code class="highlighter-rouge">max_open_files</code> lower, the cache was more likely to
+exhibit this beahviour, and cause the process to run out of file
+descriptors.  That is, <code class="highlighter-rouge">max_open_files</code> acted in almost exactly the
+opposite manner from what was intended.</p>
+
+<h3 id="the-problems">The problems</h3>
+
+<h4 id="section-1">1</h4>
+<p>The cache kept all elements on its LRU list eligible for capacity eviction—even those with outstanding references from clients.  This was ineffective in reducing resource consumption because there was an outstanding reference, guaranteeing that the items remained.  A secondary issue was that there is no guarantee that these in-use items will be the last things reached in the LRU chain, which actually recorded “least-recently requested” rather than “least-recently used”.</p>
+
+<h4 id="section-2">2</h4>
+<p>The sum of usages was decremented not when a (key,value) was evicted from the cache, but when its reference count went to zero.  Thus, when things were removed from the cache, either by garbage collection or via Erase(), the usage sum was not necessarily decreased.  This allowed the cache to act as though full when it was in fact not, reducing caching effectiveness, and leading to more resources being consumed—the opposite of what the evictions were intended to achieve.</p>
+
+<h4 id="section-3">3</h4>
+<p>(minor) The cache’s clients insert items into it by first looking up the key, and inserting only if no value is found.  Although the cache has an internal lock, the clients use no locking to ensure atomicity of the Lookup/Insert pair.  (see <code class="highlighter-rouge">table/table.cc</code>:  <code class="highlighter-rouge">block_cache-&gt;Insert()</code> and <code class="highlighter-rouge">db/table_cache.cc</code>:  <code class="highlighter-rouge">cache_-&gt;Insert()</code>).  Thus, if two threads Insert() at about the same time, they can both Lookup(), find nothing, and both Insert().  The second Insert() would evict the first value, leaving each thread with a handle on its own version of the data, and with the second version in the cache.  It would be better if both threads ended up with a handle on the same (key,value) pair, which implies it must be the first item inserted.  This suggests that Insert() should not replace an existing value.</p>
+
+<h3 id="section-4">小结</h3>
+<p>官方描述说着这么多，其实我觉得核心就一个问题，就是关于cache的usage回收时机不当的问题：capacity是cache的设定大小，usage是当前已使用的大小，当usage大于capacity时则触发淘汰，淘汰lru链中最老一些的元素直到usage降下来，不过如果淘汰的元素在被淘汰时还在被外部引用（用户使用中），则虽然该元素会从cache中被踢出，但其占用的usage并没有释放，直到该元素真正被释放时（元素引用数变为0时），其占用的usage才被回收，这样当capacity不大并且缓存的大量元素迟迟不被外部释放时，会导致cache的usage一直大于capacity而持续进行淘汰</p>
+
+<p>这个问题的解决也十分简单，就是调整一下usage的回收时机，当发生淘汰并且被淘汰元素仍在被外部引用时，那么将其从cache中踢出的同时标注其已不再cache中并释放其占用的usage，这样usage的的回收会更为及时</p>
+
+<h2 id="section-5">改进实现</h2>
+
+<p>之前的实现就是cache的标准实现，一个HandleTable(<code class="highlighter-rouge">table</code>)加一个List(<code class="highlighter-rouge">lru_</code>)，此次更新之后的cache实现，在此基础之上多了一个List(<code class="highlighter-rouge">in_use_</code>)，实际上它是分担了之前List(<code class="highlighter-rouge">lru_</code>)的部分功能，用来区分哪些当前哪些item是用户正在使用(<code class="highlighter-rouge">in_use_</code>)，哪些item用户已经不用并存在于缓存之中（<code class="highlighter-rouge">lru_</code>)，一个item如果还在cache中，那么它要么在<code class="highlighter-rouge">in_use_</code>中要么在<code class="highlighter-rouge">lru_</code>中，不可能同时存在于二者，下面直接来看下实现</p>
+
+<h3 id="section-6">主要结构</h3>
+<p>Item:</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>1. refs：引用计数，首次insert后为2（包含cache自身引用和外部引用）
+2. in_cache：bool，标记此Item是否在cache中
+</code></pre>
+</div>
+
+<p>Cache:</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>1. HandleTable
+2. lru：此链表中存着仅被cache自身引用的Item
+3. in_use：此链表中存着正在被外部引用的Item
+</code></pre>
+</div>
+
+<p>item是存在cache中的元素，它自身属性主要包括refs（引用计数）和<code class="highlighter-rouge">in_cache</code>（当前是否在cache中）</p>
+
+<h3 id="section-7">内部接口</h3>
+
+<h4 id="ref">Ref</h4>
+<ul>
+  <li>如果之前item在<code class="highlighter-rouge">lru_</code>中(refs==1 &amp;&amp; <code class="highlighter-rouge">in_cache</code>==true)，将其移动到<code class="highlighter-rouge">in_use_</code>中</li>
+  <li>refs++</li>
+</ul>
+
+<h4 id="unref">Unref</h4>
+
+<ul>
+  <li>refs–</li>
+  <li>IF refs==0:
+    <ul>
+      <li>彻底释放item</li>
+    </ul>
+  </li>
+  <li>ELSE IF item不再被用户引用（refs==1 &amp;&amp; <code class="highlighter-rouge">in_cache</code> == true)：
+    <ul>
+      <li>将其从<code class="highlighter-rouge">in_use_</code>中移动到<code class="highlighter-rouge">lru_</code>中</li>
+    </ul>
+  </li>
+</ul>
+
+<p>Ref和Unref都是内部接口，给insert及release来调用的</p>
+
+<h3 id="section-8">外部接口</h3>
+
+<h4 id="insert">Insert</h4>
+
+<ul>
+  <li>如果当前cache还有空闲容量（capacity &gt; 0)：
+    <ul>
+      <li>创建新的item，设置其refs = 2，将它插入到<code class="highlighter-rouge">in_use_</code>中，增大相应usage（代表cache目前已使用多少容量）</li>
+      <li>将item插入到<code class="highlighter-rouge">table</code>中，此时分两种情况：
+        <ul>
+          <li>1、之前<code class="highlighter-rouge">table</code>中存在相同key的item，将其从<code class="highlighter-rouge">table</code>中用当前item置换出来，并且将老的item从cache中释放（从其List，<code class="highlighter-rouge">lru_</code>或者<code class="highlighter-rouge">in_use_</code>中删除，减少相应usage，Unref）</li>
+          <li>2、之前<code class="highlighter-rouge">table</code>中不存在相同key的item，直接插入即可</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li>如果当前cache已满（usage &gt; capacity)并且<code class="highlighter-rouge">lru_</code>不为空（有目前没有正在被使用的缓存item）：
+    <ul>
+      <li>从<code class="highlighter-rouge">lru_</code>中取出最老的缓存item，将其释放（从<code class="highlighter-rouge">lru_</code>中删除，减少相应usage，Unref）</li>
+    </ul>
+  </li>
+</ul>
+
+<h4 id="lookup">Lookup</h4>
+
+<ul>
+  <li>从cache中查找相应的item</li>
+  <li>如果找到，Ref：</li>
+</ul>
+
+<p>有一点需要特殊说明一下，关于在lookup中item此时存在与哪里（<code class="highlighter-rouge">lru_</code>或<code class="highlighter-rouge">in_use_</code>)是如何判断的，如下：</p>
+
+<ul>
+  <li>item 在cache中：
+    <ul>
+      <li>item在<code class="highlighter-rouge">lru_</code>中：refs==1(cache自身引用) &amp;&amp; <code class="highlighter-rouge">in_cache</code> == true</li>
+      <li>item在<code class="highlighter-rouge">in_use_</code>中：refs&gt;1(cache自身引用+用户引用） &amp;&amp; <code class="highlighter-rouge">in_cache</code> == true</li>
+    </ul>
+  </li>
+  <li>item 不在cache中：
+ 	 * refs&gt;=1(用户引用） &amp;&amp; <code class="highlighter-rouge">in_cache</code> == false</li>
+</ul>
+
+<h4 id="release">Release</h4>
+<ul>
+  <li>Unref</li>
+</ul>
+
+<p>Release接口是给用户调用的，用来显式解除用户对item的引用</p>
+
+<h4 id="erase">Erase</h4>
+
+<ul>
+  <li>从cache中将对应item释放（从其List，<code class="highlighter-rouge">lru_</code>或者<code class="highlighter-rouge">in_use_</code>中删除，减少相应的usage，Unref）</li>
+</ul>
+
+<p>Erase接口与Release接口互补，用来从cache中移除item并解除cache对item的引用</p>
+
+<h3 id="section-9">总结</h3>
+
+<p>这个cache中的问题自己之前看代码并没有察觉到，可能还是在看的时候思考不够深入吧，其实再小的问题都值得琢磨，还是要好好学习呀^^</p>
+
+            <footer class="article-footer">
+    <div class="authorimage">
+        <img src="/assets/img/avatar.jpeg" alt="My Avatar" class="img-circle">
+    </div>
+    <section class="author">
+        <h4><a href="/about.html">KernelMaker</a></h4>
+        <a href="mailto:songzhao.asm@icloud.com">songzhao.asm@icloud.com</a>
+    </section>
+</footer>
+
+            <div id="disqus_thread"></div>
+<script>
+/**
+* RECOMMENDED CONFIGURATION VARIABLES: EDIT AND UNCOMMENT THE SECTION BELOW TO INSERT DYNAMIC VALUES FROM YOUR PLATFORM OR CMS.
+* LEARN WHY DEFINING THESE VARIABLES IS IMPORTANT: https://disqus.com/admin/universalcode/#configuration-variables
+*/
+/*
+var disqus_config = function () {
+this.page.url = PAGE_URL; // Replace PAGE_URL with your page's canonical URL variable
+this.page.identifier = PAGE_IDENTIFIER; // Replace PAGE_IDENTIFIER with your page's unique identifier variable
+};
+*/
+(function() { // DON'T EDIT BELOW THIS LINE
+var d = document, s = d.createElement('script');
+
+s.src = '//kernelmaker.disqus.com/embed.js';
+
+s.setAttribute('data-timestamp', +new Date());
+(d.head || d.body).appendChild(s);
+})();
+</script>
+<noscript>Please enable JavaScript to view the <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments powered by Disqus.</a></noscript>
+
+        </main>
+
+        <div class="footer-copyright">
+    <div class="container-fluid">
+        <div class="row-fluid">
+            <div class="col-md-12">
+                Copyright &copy; 2016 KernelMaker - All rights reserved.
+            </div>
+        </div>
+    </div>
+</div>
+<script type="text/javascript" src="/assets/js/jquery.min.js"></script>
+<script type="text/javascript" src="/assets/js/bootstrap.min.js"></script>
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-77075031-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+    </body>
+
+</html>
