@@ -62,7 +62,7 @@ robj *createObject(int type, void *ptr) {
     return o;
 }
 ```
-那么对于"set"，"aaa"，"bbb"会生成3个robj，各占28个字节，不过对于set这个robj仅仅是用来查找命令lookupCommand使用，后来会释放，不计算在内，所以仅有"aaa"和"bbb"总共占56字节
+那么对于"set"，"aaa"，"bbb"会生成3个robj，各占28个字节，不过对于set这个robj仅仅是用来查找命令lookupCommand使用，后来会释放，对"aaa"这个robj也是会用新的"aaa"的sds来存储，robj也会释放，前两个不计算在内，所以目前仅有"bbb"总共占56字节
 
 
 第二步，命令的执行，调用栈是processCommand -> call -> proc(此处为setcommand) -> setGenericCommand -> setKey，最终数据是在setKey中被存在db中，这里有一点特殊说明一下，在setcommand调用setGenericCommand之前会调用
@@ -91,7 +91,7 @@ void setKey(redisDb *db, robj *key, robj *val) {
 
 ```cpp
 void dbAdd(redisDb *db, robj *key, robj *val) {
-    sds copy = sdsdup(key->ptr);
+    sds copy = sdsdup(key->ptr); // 将key的robj转换为对应的sds，在dict中的key用sds的形式存
     int retval = dictAdd(db->dict, copy, val);
 
     redisAssertWithInfo(NULL,key,retval == REDIS_OK);
@@ -128,11 +128,11 @@ dictEntry *dictAddRaw(dict *d, void *key)
     ht->used++;
 
     /* Set the hash entry fields. */
-    dictSetKey(d, entry, key); //给dictEntry的key字段赋值，指向包含"aaa"的robj
+    dictSetKey(d, entry, key); //给dictEntry的key字段赋值，指向"aaa"的sds
     return entry;
 }
 ```
-dbAdd调用dictAdd，最终由dictAdd将这两个object插入到db中，说是插入，其实就是对这组键值对调用dictAddRaw生成一个dictEntry，并把他插入到按key求hash值索引到的桶中，说到这里已经明确了，这组键值对最终实际保存的位置就是在dictEntry中，它的大小就是最终实际大小，来看定义
+dbAdd调用dictAdd，最终由dictAdd将一个sds和一个object插入到db中，说是插入，其实就是对这组键值对调用dictAddRaw生成一个dictEntry，并把他插入到按key求hash值索引到的桶中，说到这里已经明确了，这组键值对最终实际保存的位置就是在dictEntry中，它的大小就是最终实际大小，来看定义
 
 ```cpp
 typedef struct dictEntry {
@@ -146,12 +146,12 @@ typedef struct dictEntry {
     struct dictEntry *next;
 } dictEntry;
 ```
-一个dictEntry的大小是8(key)+8(v)+8(next) = 24字节，key是一个指向包含"aaa"的robj指针，v是一个指向包含"bbb"的robj的指针，next是指向对应桶中第二个dictEntry的指针
+一个dictEntry的大小是8(key)+8(v)+8(next) = 24字节，key是一个"aaa"的sds指针，v是一个指向包含"bbb"的robj的指针，next是指向对应桶中第二个dictEntry的指针
 
 ## 结论
-* 在执行"set aaa bbb"命令后，redis会用24(dictEntry)+28(robj("aaa"))+28(robj("bbb")) = 80字节来存储
-* 在执行"set aaa 10000"命令后，redis会用24(dictEntry)+28(robj("aaa"))+16(robj("10000")) = 68字节来存储（redis对整数10000之内robj创建了shared object，也就是说如果这里不是10000而是123的话，不会为123新创建robj而是直接增加shared object中已有123的robj的计数，这样空间占用更小）
-* 上面说的80和68只是redis申请的字节数，实际占用还要根据具体allocator来看，感兴趣的话可以参考我的"TCMalloc"系列来进一步阅读^^
+* 在执行"set aaa bbb"命令后，redis会用24(dictEntry)+12(sds("aaa"))+28(robj("bbb")) = 64字节来存储
+* 在执行"set aaa 10000"命令后，redis会用24(dictEntry)+12(sds("aaa"))+16(robj("10000")) = 52字节来存储（redis对整数10000之内robj创建了shared object，也就是说如果这里不是10000而是123的话，不会为123新创建robj而是直接增加shared object中已有123的robj的计数，这样空间占用更小）
+* 上面说的64和52只是redis申请的字节数，实际占用还要根据具体allocator来看，感兴趣的话可以参考我的"TCMalloc"系列来进一步阅读^^
 
 ## 补充
 在第一步协议解析之后，redis会对每个参数生成对应的robj并且存储在redisClient的argv中，执行完命令之后会调用resetClient来释放这个argv中的每个robj，那岂不是那些被存在dictEntry的robj都被释放了？其实不会，先看resetClient实现：
@@ -189,11 +189,11 @@ void setKey(redisDb *db, robj *key, robj *val) {
     signalModifiedKey(db,key);
 }
 ```
-那么key的呢？它在哪里加？事实上，它没有加，最终会在resetClient中释放，不过在dbAdd函数中，会对key生成一个新的robj并把它存入dictEntry中，所以释放argv里的robj没有影响，具体如下：
+那么key的呢？它在哪里加？事实上，它没有加，最终会在resetClient中释放，不过在dbAdd函数中，会对key生成一个新的sds并把它存入dictEntry中，所以释放argv里的robj没有影响，具体如下：
 
 ```cpp
 void dbAdd(redisDb *db, robj *key, robj *val) {
-    sds copy = sdsdup(key->ptr); //对key生成一个新的robj
+    sds copy = sdsdup(key->ptr); //对key生成一个新的sds
     int retval = dictAdd(db->dict, copy, val);
 
     redisAssertWithInfo(NULL,key,retval == REDIS_OK);
