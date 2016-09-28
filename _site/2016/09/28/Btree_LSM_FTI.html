@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>B+ Tree、LSM、Fractal tree index 读写放大分析</title>
+  <meta name="description" content="最近刚看完一个还不错的基于B+ Tree实现的kv引擎，借着这股劲儿刚好补充了一下相关理论知识，对比着看其他资料（资料1、资料2、资料3、资料4）看了下《A Comparison of Fractal Trees to Log-Structured Merge (LSM) Trees》论文，我比较愿意扣细节，所以...">
+
+  <link rel="canonical" href="https://kernelmaker.github.io/2016/09/28/Btree_LSM_FTI.html">
+
+  <link rel="stylesheet" href="/assets/css/bootstrap.min.css">
+  <!-- <link rel="stylesheet" href="/assets/css/icard_resume.css"> -->
+  <link rel="stylesheet" href="/assets/css/font-awesome.min.css">
+  <link rel="stylesheet" href="/assets/css/blog.css" >
+  <link rel="stylesheet" href="/assets/css/syntax.css">
+
+  <link rel="icon" type="image/png" href="/assets/img/avatar.jpeg">
+
+  <!-- Google fonts -->
+  <link rel='stylesheet' href='//fonts.googleapis.com/css?family=Open+Sans:300' type='text/css'>
+  <link rel='stylesheet' href='//fonts.googleapis.com/css?family=Source+Sans+Pro' type='text/css'>
+
+  <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+  <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+  <!--[if lt IE 9]>
+  <script src="assets/js/html5shiv.min.js"></script>
+  <script src="assets/js/respond.min.js"></script>
+  <![endif]-->
+
+</head>
+
+    <body>
+        <header class="bloghead">
+    <dev class="authorheader">
+        <a href="/">
+            <img alt="My Avatar" src="/assets/img/avatar.jpeg"/>
+        </a>
+        <dev class="blogtitle">
+            <h1><a href="/">KernelMaker</a></h1>
+            <h5> 墨鱼丸是只猫 </h5>
+        </dev>
+    </dev>
+
+    <nav class="menu" role="nav">
+        <ul>
+            <li><a href="/">Home</a></li>
+            <li>|</li>
+            <li><a href="/menu.html">Menu</a></li>
+            <li>|</li>
+            <li><a target="_blank" href="https://github.com/kernelmaker">Github</a></li>
+            <li>|</li>
+            <li><a target="_blank" href="/about.html"> About Me</a></li>
+        </ul>
+    </nav>
+</header>
+
+
+        <main class="blogmain">
+            <header>
+                <h1 class="article-title">B+ Tree、LSM、Fractal tree index 读写放大分析</h1>
+                <p class="article-time">
+                    2016年09月28日 星期三,  发表于 <span>北京</span>
+                </p>
+                <p class="article-hint">
+                    如果您对本文有任何的建议或者疑问, 可以下方留言或者在
+                    <a href="https://github.com/kernelmaker/kernelmaker.github.io/issues" target="_blank">这里给我提 Issues</a>, 谢谢! :)
+                </p>
+            </header>
+            <p>最近刚看完一个还不错的基于B+ Tree实现的kv引擎，借着这股劲儿刚好补充了一下相关理论知识，对比着看其他资料（<a href="https://en.wikipedia.org/wiki/Fractal_tree_index">资料1</a>、<a href="https://www.percona.com/blog/2013/07/02/tokumx-fractal-treer-indexes-what-are-they/">资料2</a>、<a href="http://jeffe.cs.illinois.edu/teaching/473/01-search+sort.pdf">资料3</a>、<a href="http://blog.omega-prime.co.uk/?p=197">资料4</a>）看了下《A Comparison of Fractal Trees to Log-Structured Merge (LSM) Trees》论文，我比较愿意扣细节，所以看得那叫一个费劲，不过里面的分析还挺有意思，所以这里写篇博客，套着论文的结论，按着自己的理解总结一下</p>
+
+<h2 id="section">相关定义</h2>
+
+<h3 id="ramdam">1. RAM、DAM</h3>
+
+<p>RAM（<em>Random Access Machine model</em>）假设计算机有无穷大小的内存，并且访问内存任何地址都用相同的单位时间。当机器实际内存满足某个算法理论需要的内存时，RAM可以很好的描述该算法的复杂度。然而假设机器实际内存不够时，操作系统将部分内存换出到磁盘并在需要时重新换回内存，虽然这对程序自身来说可以无感知，不过客观来看，还是不得不面对此刻的两种“内存”（内存+磁盘），他们的访问时间是100ns和10ms的区别，如此大的差距如果继续使用RAM一视同仁，那么此时对复杂度的分析是不准确的。</p>
+
+<p><img src="/assets/img/2016-09-28/ram.png" width="400px" /></p>
+
+<p>DAM（<em>Disk-Access model</em>也叫<em>Standard External-Memory model</em>)有如下定义：</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>1. 一台机器有一个处理器、一个可以包含M个objects的内存以及无穷大小的外存
+2. 在一次I/O操作中，计算机可以在内存和外存之间传输包含B objects的block，其中1 &lt; B &lt; M
+3. 一个算法的Running Time可以定义为在算法执行期间I/O的次数、只用内存数据进行的计算可以认为是没有代价的
+4. 一个数据结构的大小可以定义成可以包含它的blocks数的大小 
+</code></pre>
+</div>
+
+<p><img src="/assets/img/2016-09-28/dam.png" width="400px" /></p>
+
+<p>对于外存结构来说，无疑使用DAM来分析不同数据结构的优劣更为合适，只需要分析每种数据结构在各种操作中所涉及的I/O次数即可</p>
+
+<h3 id="section-1">2. 读放大、写放大</h3>
+
+<p>写放大：<em>Write amplification</em> is the amount of data written to storage compared to the amount of data that the application wrote，也就是说实际写入磁盘的数据大小和程序要求写入数据大小之比</p>
+
+<p>读放大：<em>Read amplification</em> is the number of I/O’s required to satisfy a particular query，也就是一次查询所需要的I/O数</p>
+
+<h2 id="section-2">分析</h2>
+
+<h3 id="b-tree">1. B+ Tree</h3>
+
+<p>为了方便分析，我们进行相关约定，B+ Tree的block size为B，故每个内部节点包含O(B)个子节点，叶子节点包含O(B)条数据，假设数据集大小为N，则B+ Tree的高度为O((log N/B)/(log B))</p>
+
+<p>写放大：B+ Tree的每次insert都会在叶子节点写入数据，不论数据实际大小，每次都需要写入B，所以写放大是B</p>
+
+<p>读放大：B+ Tree的一次查询需要从根节点一路查到具体的某个叶子节点，所以需要等于层数大小的I/O，也就是O((log N/B)/(log B))， 即写放大为O((log N/B)/(log B))</p>
+
+<h3 id="factal-tree-index">2. Factal Tree Index</h3>
+
+<p>与B+ Tree稍有不同，FTI将每个block从中分一部分用作buffer，假设每个block size 为B，现在每个内部节点拥有K个子节点（k可以等于根号下B），则FTI的高度为O((log N/B)/(log K))</p>
+
+<p>写放大：当root的buffer满了之后，需要将buffer中的records推到子节点的buffer中，一般情况下，每个子节点收到B/K个records，也就是说每B/K个records产生一次I/O，也就是写入B，那么每一个record产生K/B次I/O，也就是写入K，同样一条record，每往下推一层就产生K/B次I/O，写入K，所以一共写入O(K(log N/B)/(log K))，即写放大为O(K(log N/B)/(log K))</p>
+
+<p>读放大：同B+ Tree一样，和树的高度相关，不过此时的高度为O((log N/B)/(log K))，即读放大为O((log N/B)/(log K))</p>
+
+<h3 id="lsm-tree">3. LSM Tree</h3>
+
+<h4 id="leveld-lsm-tree">Leveld LSM Tree</h4>
+
+<p>假设数据集大小为N，放大因子为k，最小层一个文件大小为B，每层文件的单个文件大小相同都为B，不过每层文件个数不同</p>
+
+<p>写放大：同一个record，会在本层写k次之后才会被compact到下一层，也就是说每次层会放大k，一共有层数O((log N/B)/(log B))，故写放大为O(k(log N/B)/(log B))</p>
+
+<p>读放大：依次在每一层进行二分查找，直到在最后一层找到，即：
+	R = (log N/B) + (log N/Bk) + (log N/Bkk) + … + 1
+	= (log N/B) + (log N/B) - (log k) + (log N/B) - 2(log k) +… + 1
+会有R次I/O，故读放大为R，即O((log N/B)*(log N/B)/(log k))</p>
+
+<h4 id="size-tired-lsm-tree">Size-tired LSM Tree</h4>
+
+<p>假设数据集大小为N，放大因子为k，最大层有k个大小为N/k个文件，倒数第二层有k个N/kk个文件…那么一共有O((log N/B)/(log k))层</p>
+
+<p>写放大：同一个record，在每一层只会写一次，所以写放大等于层数，即O((log N/B)/(log k))</p>
+
+<p>读放大：每一层读k个文件，一共O((log N/B)/(log k))层，故一共需要读O(k(log N/B)/(log k))个文件，不同于Leveld LSM Tree，一个文件不只是一个block B，而是有很多blocks，近似O(N/B)个，在文件内部二分查找找到对应的block需要O(log N/B)，故整体需要O(k(log N/B)(log N/B)/(log k))次I/O，即读放大为O(k(log N/B)(log N/B)/(log k))</p>
+
+<h3 id="section-3">总结</h3>
+
+<p><img src="/assets/img/2016-09-28/conclusion.png" width="600px" /></p>
+
+<ol>
+  <li>Fractal Tree Index 在写放大和读放大方便表现的都很不错</li>
+  <li>Leveld LSM Tree 在写放大方面和FTI差不多，但是读放大方面比FTI要差</li>
+  <li>Size-tired LSM Tree 在写放大方面优于FTI和Leveld LSM Tree，但读放大方面表现最差，一般少读多写并对写性能有较高要求的场景下考虑使用Size-tired LSM Tree</li>
+  <li>B+ Tree 有较高的写放大，但是在读放大方面不错</li>
+</ol>
+
+            <footer class="article-footer">
+    <div class="authorimage">
+        <img src="/assets/img/avatar.jpeg" alt="My Avatar" class="img-circle">
+    </div>
+    <section class="author">
+        <h4><a href="/about.html">KernelMaker</a></h4>
+        <a href="mailto:songzhao.asm@icloud.com">songzhao.asm@icloud.com</a>
+    </section>
+</footer>
+
+            <div id="disqus_thread"></div>
+<script>
+/**
+* RECOMMENDED CONFIGURATION VARIABLES: EDIT AND UNCOMMENT THE SECTION BELOW TO INSERT DYNAMIC VALUES FROM YOUR PLATFORM OR CMS.
+* LEARN WHY DEFINING THESE VARIABLES IS IMPORTANT: https://disqus.com/admin/universalcode/#configuration-variables
+*/
+/*
+var disqus_config = function () {
+this.page.url = PAGE_URL; // Replace PAGE_URL with your page's canonical URL variable
+this.page.identifier = PAGE_IDENTIFIER; // Replace PAGE_IDENTIFIER with your page's unique identifier variable
+};
+*/
+(function() { // DON'T EDIT BELOW THIS LINE
+var d = document, s = d.createElement('script');
+
+s.src = '//kernelmaker.disqus.com/embed.js';
+
+s.setAttribute('data-timestamp', +new Date());
+(d.head || d.body).appendChild(s);
+})();
+</script>
+<noscript>Please enable JavaScript to view the <a href="https://disqus.com/?ref_noscript" rel="nofollow">comments powered by Disqus.</a></noscript>
+
+        </main>
+
+        <div class="footer-copyright">
+    <div class="container-fluid">
+        <div class="row-fluid">
+            <div class="col-md-12">
+                Copyright &copy; 2016 KernelMaker - All rights reserved.
+            </div>
+        </div>
+    </div>
+</div>
+<script type="text/javascript" src="/assets/js/jquery.min.js"></script>
+<script type="text/javascript" src="/assets/js/bootstrap.min.js"></script>
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-77075031-1', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+
+    </body>
+
+</html>

@@ -124,7 +124,7 @@
 <span class="p">}</span>
 </code></pre>
 </div>
-<p>那么对于”set”，”aaa”，”bbb”会生成3个robj，各占28个字节，不过对于set这个robj仅仅是用来查找命令lookupCommand使用，后来会释放，不计算在内，所以仅有”aaa”和”bbb”总共占56字节</p>
+<p>那么对于”set”，”aaa”，”bbb”会生成3个robj，各占28个字节，不过对于set这个robj仅仅是用来查找命令lookupCommand使用，后来会释放，对”aaa”这个robj也是会用新的”aaa”的sds来存储，robj也会释放，前两个不计算在内，所以目前仅有”bbb”总共占56字节</p>
 
 <p>第二步，命令的执行，调用栈是processCommand -&gt; call -&gt; proc(此处为setcommand) -&gt; setGenericCommand -&gt; setKey，最终数据是在setKey中被存在db中，这里有一点特殊说明一下，在setcommand调用setGenericCommand之前会调用</p>
 
@@ -151,8 +151,8 @@
 <p>可以看到我们会将”aaa”和”bbb”的robj指针作为第二、三参数传给它，这里假设这个key之前不存在，那么会调用dbAdd把他插入到db中(db实际是个hash表）</p>
 
 <div class="highlighter-rouge"><pre class="highlight"><code><span class="kt">void</span> <span class="nf">dbAdd</span><span class="p">(</span><span class="n">redisDb</span> <span class="o">*</span><span class="n">db</span><span class="p">,</span> <span class="n">robj</span> <span class="o">*</span><span class="n">key</span><span class="p">,</span> <span class="n">robj</span> <span class="o">*</span><span class="n">val</span><span class="p">)</span> <span class="p">{</span>
-    <span class="n">sds</span> <span class="n">copy</span> <span class="o">=</span> <span class="n">sdsdup</span><span class="p">(</span><span class="n">key</span><span class="o">-&gt;</span><span class="n">ptr</span><span class="p">);</span>
-    <span class="kt">int</span> <span class="n">retval</span> <span class="o">=</span> <span class="n">dictAdd</span><span class="p">(</span><span class="n">db</span><span class="o">-&gt;</span><span class="n">dict</span><span class="p">,</span> <span class="n">copy</span><span class="p">,</span> <span class="n">val</span><span class="p">);</span>
+    <span class="n">sds</span> <span class="n">copy</span> <span class="o">=</span> <span class="n">sdsdup</span><span class="p">(</span><span class="n">key</span><span class="o">-&gt;</span><span class="n">ptr</span><span class="p">);</span> <span class="c1">// 将key的robj转换为对应的sds，在dict中的key用sds的形式存
+</span>    <span class="kt">int</span> <span class="n">retval</span> <span class="o">=</span> <span class="n">dictAdd</span><span class="p">(</span><span class="n">db</span><span class="o">-&gt;</span><span class="n">dict</span><span class="p">,</span> <span class="n">copy</span><span class="p">,</span> <span class="n">val</span><span class="p">);</span>
 
     <span class="n">redisAssertWithInfo</span><span class="p">(</span><span class="nb">NULL</span><span class="p">,</span><span class="n">key</span><span class="p">,</span><span class="n">retval</span> <span class="o">==</span> <span class="n">REDIS_OK</span><span class="p">);</span>
     <span class="k">if</span> <span class="p">(</span><span class="n">val</span><span class="o">-&gt;</span><span class="n">type</span> <span class="o">==</span> <span class="n">REDIS_LIST</span><span class="p">)</span> <span class="n">signalListAsReady</span><span class="p">(</span><span class="n">db</span><span class="p">,</span> <span class="n">key</span><span class="p">);</span>
@@ -188,12 +188,12 @@
     <span class="n">ht</span><span class="o">-&gt;</span><span class="n">used</span><span class="o">++</span><span class="p">;</span>
 
     <span class="cm">/* Set the hash entry fields. */</span>
-    <span class="n">dictSetKey</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">entry</span><span class="p">,</span> <span class="n">key</span><span class="p">);</span> <span class="c1">//给dictEntry的key字段赋值，指向包含"aaa"的robj
+    <span class="n">dictSetKey</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">entry</span><span class="p">,</span> <span class="n">key</span><span class="p">);</span> <span class="c1">//给dictEntry的key字段赋值，指向"aaa"的sds
 </span>    <span class="k">return</span> <span class="n">entry</span><span class="p">;</span>
 <span class="p">}</span>
 </code></pre>
 </div>
-<p>dbAdd调用dictAdd，最终由dictAdd将这两个object插入到db中，说是插入，其实就是对这组键值对调用dictAddRaw生成一个dictEntry，并把他插入到按key求hash值索引到的桶中，说到这里已经明确了，这组键值对最终实际保存的位置就是在dictEntry中，它的大小就是最终实际大小，来看定义</p>
+<p>dbAdd调用dictAdd，最终由dictAdd将一个sds和一个object插入到db中，说是插入，其实就是对这组键值对调用dictAddRaw生成一个dictEntry，并把他插入到按key求hash值索引到的桶中，说到这里已经明确了，这组键值对最终实际保存的位置就是在dictEntry中，它的大小就是最终实际大小，来看定义</p>
 
 <div class="highlighter-rouge"><pre class="highlight"><code><span class="k">typedef</span> <span class="k">struct</span> <span class="n">dictEntry</span> <span class="p">{</span>
     <span class="kt">void</span> <span class="o">*</span><span class="n">key</span><span class="p">;</span>
@@ -207,13 +207,13 @@
 <span class="p">}</span> <span class="n">dictEntry</span><span class="p">;</span>
 </code></pre>
 </div>
-<p>一个dictEntry的大小是8(key)+8(v)+8(next) = 24字节，key是一个指向包含”aaa”的robj指针，v是一个指向包含”bbb”的robj的指针，next是指向对应桶中第二个dictEntry的指针</p>
+<p>一个dictEntry的大小是8(key)+8(v)+8(next) = 24字节，key是一个”aaa”的sds指针，v是一个指向包含”bbb”的robj的指针，next是指向对应桶中第二个dictEntry的指针</p>
 
 <h2 id="section-1">结论</h2>
 <ul>
-  <li>在执行”set aaa bbb”命令后，redis会用24(dictEntry)+28(robj(“aaa”))+28(robj(“bbb”)) = 80字节来存储</li>
-  <li>在执行”set aaa 10000”命令后，redis会用24(dictEntry)+28(robj(“aaa”))+16(robj(“10000”)) = 68字节来存储（redis对整数10000之内robj创建了shared object，也就是说如果这里不是10000而是123的话，不会为123新创建robj而是直接增加shared object中已有123的robj的计数，这样空间占用更小）</li>
-  <li>上面说的80和68只是redis申请的字节数，实际占用还要根据具体allocator来看，感兴趣的话可以参考我的”TCMalloc”系列来进一步阅读^^</li>
+  <li>在执行”set aaa bbb”命令后，redis会用24(dictEntry)+12(sds(“aaa”))+28(robj(“bbb”)) = 64字节来存储</li>
+  <li>在执行”set aaa 10000”命令后，redis会用24(dictEntry)+12(sds(“aaa”))+16(robj(“10000”)) = 52字节来存储（redis对整数10000之内robj创建了shared object，也就是说如果这里不是10000而是123的话，不会为123新创建robj而是直接增加shared object中已有123的robj的计数，这样空间占用更小）</li>
+  <li>上面说的64和52只是redis申请的字节数，实际占用还要根据具体allocator来看，感兴趣的话可以参考我的”TCMalloc”系列来进一步阅读^^</li>
 </ul>
 
 <h2 id="section-2">补充</h2>
@@ -252,10 +252,10 @@
 <span class="p">}</span>
 </code></pre>
 </div>
-<p>那么key的呢？它在哪里加？事实上，它没有加，最终会在resetClient中释放，不过在dbAdd函数中，会对key生成一个新的robj并把它存入dictEntry中，所以释放argv里的robj没有影响，具体如下：</p>
+<p>那么key的呢？它在哪里加？事实上，它没有加，最终会在resetClient中释放，不过在dbAdd函数中，会对key生成一个新的sds并把它存入dictEntry中，所以释放argv里的robj没有影响，具体如下：</p>
 
 <div class="highlighter-rouge"><pre class="highlight"><code><span class="kt">void</span> <span class="nf">dbAdd</span><span class="p">(</span><span class="n">redisDb</span> <span class="o">*</span><span class="n">db</span><span class="p">,</span> <span class="n">robj</span> <span class="o">*</span><span class="n">key</span><span class="p">,</span> <span class="n">robj</span> <span class="o">*</span><span class="n">val</span><span class="p">)</span> <span class="p">{</span>
-    <span class="n">sds</span> <span class="n">copy</span> <span class="o">=</span> <span class="n">sdsdup</span><span class="p">(</span><span class="n">key</span><span class="o">-&gt;</span><span class="n">ptr</span><span class="p">);</span> <span class="c1">//对key生成一个新的robj
+    <span class="n">sds</span> <span class="n">copy</span> <span class="o">=</span> <span class="n">sdsdup</span><span class="p">(</span><span class="n">key</span><span class="o">-&gt;</span><span class="n">ptr</span><span class="p">);</span> <span class="c1">//对key生成一个新的sds
 </span>    <span class="kt">int</span> <span class="n">retval</span> <span class="o">=</span> <span class="n">dictAdd</span><span class="p">(</span><span class="n">db</span><span class="o">-&gt;</span><span class="n">dict</span><span class="p">,</span> <span class="n">copy</span><span class="p">,</span> <span class="n">val</span><span class="p">);</span>
 
     <span class="n">redisAssertWithInfo</span><span class="p">(</span><span class="nb">NULL</span><span class="p">,</span><span class="n">key</span><span class="p">,</span><span class="n">retval</span> <span class="o">==</span> <span class="n">REDIS_OK</span><span class="p">);</span>
