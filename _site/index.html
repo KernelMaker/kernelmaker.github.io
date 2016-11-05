@@ -64,6 +64,29 @@
 <article class="preview">
     <header>
         <h2 class="post-title">
+            <a href="/2016/11/02/kchashdb.html">  Kyoto Cabinet之kchashdb </a>
+        </h2>
+        <p class="post-time"> 2016年11月02日 星期三</p>
+    </header>
+    <section class="post-section">
+        <p>
+            <p>对Embeddable data storage engines比较感兴趣，之前也只精读了leveldb，泛读了rocksdb的代码，这俩都是LSM Tree的实现，感觉还是有点窄，所以一直想找基于B+Tree实现的引擎看看，晦涩的lmdb给我看的半死，不爽，然后读了一个还在开发中的B+tree实现的引擎（<a href="https://github.com/malbrain/Btree-source-code">传送门</a>），实现比较清晰不过感觉这就是写着玩的没有生产环境的验证，还是不爽，所以找到了<a href="http://fallabs.com/kyotocabinet/">Kyoto Cabinet</a>，在看treedb之前，发现它有基于hash实现的内存和文件的引擎，比较好奇所以先看了下kccachedb(基于内存)和kchashdb（基于文件），测了下性能还不错，这里简单总结一下</p>
+
+
+        </p>
+        <p class="readmore">
+            <a href="/2016/11/02/kchashdb.html">
+                阅读全文
+                <span class="glyphicon glyphicon-circle-arrow-right"></span>
+            </a>
+        </p>
+    </section>
+
+</article>
+
+<article class="preview">
+    <header>
+        <h2 class="post-title">
             <a href="/2016/09/28/Btree_LSM_FTI.html">  B+ Tree、LSM、Fractal tree index 读写放大分析 </a>
         </h2>
         <p class="post-time"> 2016年09月28日 星期三</p>
