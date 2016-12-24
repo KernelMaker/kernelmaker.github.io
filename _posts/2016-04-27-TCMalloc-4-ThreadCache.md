@@ -1,9 +1,6 @@
 ---
-layout: post_layout
+layout: post
 title: TCMalloc源码学习-4-ThreadCache
-time: 2016年04月27日 星期三
-location: 北京
-published: true
 ---
 
 这一篇讲一讲上层的ThreadCache，第一篇已经说过，每个线程都有自己的缓存，线程间的小内存申请和释放不需要全局锁抢锁，提高了分配效率，并且ThreadCache还有比较好的内存归还策略，尽可能的做到线程间的平衡，下面就来详细说一说
@@ -23,19 +20,35 @@ SYNOPSIS
 
 
 DESCRIPTION
-       The pthread_key_create() function shall create a thread-specific data key visible to all threads in the process. Key values provided by pthread_key_create() are opaque objects used  to  locate  thread-spe-
-       cific  data.  Although the same key value may be used by different threads, the values bound to the key by pthread_setspecific() are maintained on a per-thread basis and persist for the life of the calling
-       thread.
+       The pthread_key_create() function shall create a thread-specific data 
+       key visible to all threads in the process. Key values provided by 
+       pthread_key_create() are opaque objects used  to  locate  thread-spe-
+       cific  data.  Although the same key value may be used by different 
+       threads, the values bound to the key by pthread_setspecific() are 
+       maintained on a per-thread basis and persist for the life of the 
+       calling thread.
 
-       Upon key creation, the value NULL shall be associated with the new key in all active threads. Upon thread creation, the value NULL shall be associated with all defined keys in the new thread.
+       Upon key creation, the value NULL shall be associated with the new key
+       in all active threads. Upon thread creation, the value NULL shall be 
+       associated with all defined keys in the new thread.
 
-       An optional destructor function may be associated with each key value.  At thread exit, if a key value has a non-NULL destructor pointer, and the thread has a non-NULL value associated with that  key,  the
-       value of the key is set to NULL, and then the function pointed to is called with the previously associated value as its sole argument. The order of destructor calls is unspecified if more than one destruc-
+       An optional destructor function may be associated with each key value.
+       At thread exit, if a key value has a non-NULL destructor pointer, and 
+       the thread has a non-NULL value associated with that  key,  the
+       value of the key is set to NULL, and then the function pointed to is 
+       called with the previously associated value as its sole argument. The
+       order of destructor calls is unspecified if more than one destruc-
        tor exists for a thread when it exits.
 
-       If, after all the destructors have been called for all non-NULL values with associated destructors, there are still some non-NULL values with associated destructors, then  the  process  is  repeated.   If,
-       after  at  least  {PTHREAD_DESTRUCTOR_ITERATIONS}  iterations of destructor calls for outstanding non-NULL values, there are still some non-NULL values with associated destructors, implementations may stop
-       calling destructors, or they may continue calling destructors until no non-NULL values with associated destructors exist, even though this might result in an infinite loop.
+       If, after all the destructors have been called for all non-NULL values
+       with associated destructors, there are still some non-NULL values with
+       associated destructors, then  the  process  is  repeated.   If,
+       after  at  least  {PTHREAD_DESTRUCTOR_ITERATIONS}  iterations of destr
+       uctor calls for outstanding non-NULL values, there are still some 
+       non-NULL values with associated destructors, implementations may stop
+       calling destructors, or they may continue calling destructors until 
+       no non-NULL values with associated destructors exist, even though this
+       might result in an infinite loop.
 ```
 来看看ThreadCreate如何用的，在初始化函数InitTSD里，通过`pthread_key_create(&heap_key_, DestroyThreadCache)`来定义一个`pthread_key_t`变量`heap_key_`，这样，后来每个线程在自己初始化的时候，只要通过`pthread_setspecific(heap_key_, heap)`就可以定义自己的局部缓存heap，然后通过`pthread_getspecific(heap_key_)`便可以拿到自己的局部缓存了，并且在线程退出的时候，会回调DestroyThreadCache来释放自己的heap，好了原理就是这个了，还有一个是如果内核支持TLS，就用TLS，这里还没有具体看
 
@@ -88,7 +101,8 @@ inline ThreadCache* ThreadCache::GetCache() {
   //否则，获取所属线程的局部缓存heap，也就是通过pthread_getspecific来获取
     ptr = GetThreadHeap();
   }
-  //第一次肯定是还没有创建局部heap，所以上一步返回的ptr是NULL，这里创建一个heap，并通过pthread_setspecific绑定局部heap
+  //第一次肯定是还没有创建局部heap，所以上一步返回的ptr是NULL，这里创建一个heap，
+  //并通过pthread_setspecific绑定局部heap
   if (ptr == NULL) ptr = CreateCacheIfNecessary();
   return ptr;
 }
@@ -97,7 +111,8 @@ inline ThreadCache* ThreadCache::GetCache() {
 获取到ThreadCache对象之后，便可以通过Allocate和Deallocate来申请和释放小内存了，来分别看下实现：
 
 ```cpp
-//调用者do_malloc会根据用户传的usersize来判断，如果小于256k，则通过查表找到usersize对应的classsize索引cl和对应的实际分配size，传给Allocate
+//调用者do_malloc会根据用户传的usersize来判断，如果小于256k，则通过查表找到
+//usersize对应的classsize索引cl和对应的实际分配size，传给Allocate
 inline void* ThreadCache::Allocate(size_t size, size_t cl) {
   ASSERT(size <= kMaxSize);
   ASSERT(size == Static::sizemap()->ByteSizeForClass(cl));
@@ -136,7 +151,12 @@ void* ThreadCache::FetchFromCentralCache(size_t cl, size_t byte_size) {
   // Increase max length slowly up to batch_size.  After that,
   // increase by batch_size in one shot so that the length is a
   // multiple of batch_size.
-  //这里是对每次从CentralFreeList中拿多少个object进行动态调整，第一篇说到有一个数组记录着每个cl每次从CentralFreeList中拿多少，但并不是这样，max_length初始值是1，第一次拿1个，max_length加1，第二次拿两个，max_length加2，直到某次拿的数目，也就是max_length >= batch_size，这以后就每次拿batch_size个，max_length每次加batch_size，类似于慢启动的方式，这里是一个优化
+  //这里是对每次从CentralFreeList中拿多少个object进行动态调整，第一篇说到
+  //有一个数组记录着每个cl每次从CentralFreeList中拿多少，但并不是这样，
+  //max_length初始值是1，第一次拿1个，max_length加1，第二次拿两个，
+  //max_length加2，直到某次拿的数目，也就是max_length >= batch_size，这
+  //以后就每次拿batch_size个，max_length每次加batch_size，类似于慢启动的
+  //方式，这里是一个优化
   if (list->max_length() < batch_size) {
     list->set_max_length(list->max_length() + 1);
   } else {
@@ -179,7 +199,10 @@ inline void ThreadCache::Deallocate(void* ptr, size_t cl) {
   // In the common case we're done, and in that case we need a single branch
   // because of the bitwise-or trick that follows.
   if ((list_headroom | size_headroom) < 0) {
-    //如果当前list的长度大于max_length，刚开始的时候是每次1，2，3，4...个从CentralFreeList中拿，max_length也每次增加同样的长度，如果此时list的长度大于max_length，也就是说已经过了慢启动的状态，list每次向CentralFreeList都申请batch_size个，这时有内存还回来，list过长，需要缩容
+    //如果当前list的长度大于max_length，刚开始的时候是每次1，2，3，4...个
+    //从CentralFreeList中拿，max_length也每次增加同样的长度，如果此时list
+    //的长度大于max_length，也就是说已经过了慢启动的状态，list每次向
+    //CentralFreeList都申请batch_size个，这时有内存还回来，list过长，需要缩容
     if (list_headroom < 0) {
       //这里做了一些事情，下面具体看一下
       ListTooLong(list, cl);
@@ -203,7 +226,8 @@ void ThreadCache::ListTooLong(FreeList* list, size_t cl) {
     // Slow start the max_length so we don't overreserve.
     list->set_max_length(list->max_length() + 1);
   } else if (list->max_length() > batch_size) {
-    //如果连还kMaxOverages次，每次max_length都大于batch_size，则将max_size减小，减小batch_size个
+    //如果连还kMaxOverages次，每次max_length都大于batch_size，
+    //则将max_size减小，减小batch_size个
     // If we consistently go over max_length, shrink max_length.  If we don't
     // shrink it, some amount of memory will always stay in this freelist.
     list->set_length_overages(list->length_overages() + 1);
@@ -259,7 +283,9 @@ void ThreadCache::IncreaseCacheLimit() {
 }
 
 void ThreadCache::IncreaseCacheLimitLocked() {
-  //unclaimed初始值是32M，也就是说所有每个线程一共可以缓存32M(好像不是硬上限)，如果缓存空间还没用完，每次将max_size_增加kStealAmount即可
+  //unclaimed初始值是32M，也就是说所有每个线程一共可以缓存
+  //32M(好像不是硬上限)，如果缓存空间还没用完，每次将
+  //max_size_增加kStealAmount即可
   if (unclaimed_cache_space_ > 0) {
     // Possibly make unclaimed_cache_space_ negative.
     unclaimed_cache_space_ -= kStealAmount;
@@ -270,7 +296,8 @@ void ThreadCache::IncreaseCacheLimitLocked() {
   // threads before giving up.  The i < 10 condition also prevents an
   // infinite loop in case none of the existing thread heaps are
   // suitable places to steal from.
-  // 如果缓存空间已经用完，则需要从其他线程去偷一些，尝试偷10次，遍历其他线程的ThreadCache
+  // 如果缓存空间已经用完，则需要从其他线程去偷一些，
+  //尝试偷10次，遍历其他线程的ThreadCache
   for (int i = 0; i < 10;
        ++i, next_memory_steal_ = next_memory_steal_->next_) {
     // Reached the end of the linked list.  Start at the beginning.
@@ -283,7 +310,8 @@ void ThreadCache::IncreaseCacheLimitLocked() {
         next_memory_steal_->max_size_ <= kMinThreadCacheSize) {
       continue;
     }
-    //偷：减少其他线程的max_size_ ，增加给自己，其他线程的max_size减少后，会在Deallocate最后触发Scavenge()，还一些给CentralFreeList
+    //偷：减少其他线程的max_size_ ，增加给自己，其他线程的max_size减少
+    //后，会在Deallocate最后触发Scavenge()，还一些给CentralFreeList
     next_memory_steal_->max_size_ -= kStealAmount;
     max_size_ += kStealAmount;
 

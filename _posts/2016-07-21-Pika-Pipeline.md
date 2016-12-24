@@ -1,9 +1,6 @@
 ---
-layout: post_layout
+layout: post
 title: pika导致redis客户端使用pipeline卡死的问题
-time: 2016年07月21日 星期四
-location: 北京
-published: true
 ---
 
 有人在github提issue反馈redis客户端使用pipeline往pika灌数据，当数据量稍大一些，客户端会卡死，我找了下原因，这里总结一下吧

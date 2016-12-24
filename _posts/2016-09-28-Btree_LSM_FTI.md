@@ -1,9 +1,6 @@
 ---
-layout: post_layout
+layout: post
 title: B+ Tree、LSM、Fractal tree index 读写放大分析
-time: 2016年09月28日 星期三
-location: 北京
-published: true
 ---
 
 最近刚看完一个还不错的基于B+ Tree实现的kv引擎，借着这股劲儿刚好补充了一下相关理论知识，对比着看其他资料（[资料1](https://en.wikipedia.org/wiki/Fractal_tree_index)、[资料2](https://www.percona.com/blog/2013/07/02/tokumx-fractal-treer-indexes-what-are-they/)、[资料3](http://jeffe.cs.illinois.edu/teaching/473/01-search+sort.pdf)、[资料4](http://blog.omega-prime.co.uk/?p=197)）看了下《A Comparison of Fractal Trees to Log-Structured Merge (LSM) Trees》论文，我比较愿意扣细节，所以看得那叫一个费劲，不过里面的分析还挺有意思，所以这里写篇博客，套着论文的结论，按着自己的理解总结一下
@@ -14,7 +11,7 @@ published: true
 
   RAM（*Random Access Machine model*）假设计算机有无穷大小的内存，并且访问内存任何地址都用相同的单位时间。当机器实际内存满足某个算法理论需要的内存时，RAM可以很好的描述该算法的复杂度。然而假设机器实际内存不够时，操作系统将部分内存换出到磁盘并在需要时重新换回内存，虽然这对程序自身来说可以无感知，不过客观来看，还是不得不面对此刻的两种“内存”（内存+磁盘），他们的访问时间是100ns和10ms的区别，如此大的差距如果继续使用RAM一视同仁，那么此时对复杂度的分析是不准确的。
 
-<img src="/assets/img/2016-09-28/ram.png" width="400px" />
+<img src="/public/images/2016-09-28/ram.png" width="400px" />
 
   DAM（*Disk-Access model*也叫*Standard External-Memory model*)有如下定义：
 	
@@ -23,7 +20,7 @@ published: true
 	3. 一个算法的Running Time可以定义为在算法执行期间I/O的次数、只用内存数据进行的计算可以认为是没有代价的
 	4. 一个数据结构的大小可以定义成可以包含它的blocks数的大小 
 
-<img src="/assets/img/2016-09-28/dam.png" width="400px" />
+<img src="/public/images/2016-09-28/dam.png" width="400px" />
 
   对于外存结构来说，无疑使用DAM来分析不同数据结构的优劣更为合适，只需要分析每种数据结构在各种操作中所涉及的I/O次数即可
 
@@ -79,7 +76,7 @@ published: true
 
 ### 总结
 
-<img src="/assets/img/2016-09-28/conclusion.png" width="600px" />
+<img src="/public/images/2016-09-28/conclusion.png" width="600px" />
 
 1. Fractal Tree Index 在写放大和读放大方便表现的都很不错
 2. Leveld LSM Tree 在写放大方面和FTI差不多，但是读放大方面比FTI要差

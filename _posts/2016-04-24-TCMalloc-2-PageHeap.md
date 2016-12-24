@@ -1,10 +1,6 @@
 ---
-layout: post_layout
+layout: post
 title: TCMalloc源码学习-2-PageHeap
-time: 2016年04月24日 星期日
-location: 北京
-published: true
-excerpt_separator: "##"
 ---
 
 这一篇主要是从TCMalloc最下层的内存管理模块入手，介绍一下PageHeap的实现。TCMalloc无论自己怎么管理内存，这些内存肯定都是要通过向操作系统来申请的，那么什么时候申请呢？申请到的内存该怎么管理呢？什么时候还给操作系统呢？这些就是PageHeap要做的事情啦。我们以32位系统为例，详细介绍一下。
@@ -15,7 +11,7 @@ excerpt_separator: "##"
 
 对，从内存地址入手！不管怎么着，PageHeap肯定要通过brk或者mmap来向操作系统申请内存，得到的是一个(void*)指针，4个字节，那么4G的内存对应的地址范围就是(0x00000000 ~ 0xFFFFFFFF),我们知道PageHeap定义的1页为8K，也就是地址的低13位是页内偏移，高19位则是页索引，最简单的办法就是用一个一维数组，一共1<<19个元素，每个元素指向其对应的1页，不过这样的一维设计有点太简单粗暴，TCMalloc采用的是2级映射，高19位继续分成5位和14位，如下图上半部分所示：
 
-<img src="/assets/img/2016-04-24/TCMalloc-2-PageHeap-pic1.png" width="400px" />
+<img src="/public/images/2016-04-24/TCMalloc-2-PageHeap-pic1.png" width="400px" />
 
 先不管span，这其实就是一个2维数组，定义如下：
 
@@ -95,14 +91,20 @@ Span* PageHeap::SearchFreeAndLargeLists(Length n) {
   ASSERT(n > 0);
 
   // Find first size >= n that has a non-empty list
-  //对应0~127个页，每一个length都有自己的free_链表，元素是SpanList指针，SpanList包含两个span指针的链表，分别叫normal和returned，normal代表已经申请到的目前可用的内存，returned代表已经调用fadvise还给操作系统的内存，然后从n开始直到找到第一个合适的span，然后分配
+  //对应0~127个页，每一个length都有自己的free_链表，元素是SpanList指针，SpanList包含
+  //两个span指针的链表，分别叫normal和returned，normal代表已经申请到的目前可用的内存
+  //，returned代表已经调用fadvise还给操作系统的内存，然后从n开始直到找到第一个合适的
+  //span，然后分配
   for (Length s = n; s < kMaxPages; s++) {
     //先找normal
     Span* ll = &free_[s].normal;
     // If we're lucky, ll is non-empty, meaning it has a suitable span.
     if (!DLL_IsEmpty(ll)) {
       ASSERT(ll->next->location == Span::ON_NORMAL_FREELIST);
-      //找到了，切分这个span，其实就是假如我要4个页，但free_[4]已经没有多余可用的了，free_[5]有，所以从free_[5]中取出一个span，free_[5]中每个span包含5页，所以修改这个span的信息让它包含前4个页，返回，多余1个页重新包一个新的span，插入到free_[1]中
+      //找到了，切分这个span，其实就是假如我要4个页，但free_[4]已经没有多余可用的了，
+      //free_[5]有，所以从free_[5]中取出一个span，free_[5]中每个span包含5页，所以修
+      //改这个span的信息让它包含前4个页，返回，多余1个页重新包一个新的span，插入
+      //到free_[1]中
       return Carve(ll->next, n);
     }
     // Alternatively, maybe there's a usable returned span.
@@ -114,7 +116,10 @@ Span* PageHeap::SearchFreeAndLargeLists(Length n) {
     }
   }
   // No luck in free lists, our last chance is in a larger class.
-  //很不幸，上面都没有，我们尝试从大内存的缓存链表中找，也就是large_链表中找，large_链表是没有走`thread_cache`和`central_list`，直接从PageHeap申请的内存用完还回来以后的缓存或者是在Delete操作时多个可用的相邻小span拼出一个大的(256k内存)span插入到large_中的，如果这里还没有，就返回NULL
+  //很不幸，上面都没有，我们尝试从大内存的缓存链表中找，也就是large_链表中找，large_链表
+  //是没有走`thread_cache`和`central_list`，直接从PageHeap申请的内存用完还回来以后的缓存
+  //或者是在Delete操作时多个可用的相邻小span拼出一个大的(256k内存)span插入到large_中的，
+  //如果这里还没有，就返回NULL
   return AllocLarge(n);  // May be NULL
 }
 ```
@@ -158,14 +163,19 @@ bool PageHeap::GrowHeap(Length n) {
   // Make sure pagemap_ has entries for all of the new pages.
   // Plus ensure one before and one after so coalescing code
   // does not need bounds-checking.
-  //Ensure其实就是保证本次申请的一批连续页，它前一个页和后一个页对应的leaf已经生成，方便在今后内存归还的时候可以合并成更大的一段连续页
+  //Ensure其实就是保证本次申请的一批连续页，它前一个页和后一个页对应的leaf已经生成，方便在
+  //今后内存归还的时候可以合并成更大的一段连续页
   if (pagemap_.Ensure(p-1, ask+2)) {
     // Pretend the new area is allocated and then Delete() it to cause
     // any necessary coalescing to occur.
-    //创建一个新的span记录这段内存,span是由PageHeapAllocator来创建的，主要也是一下申请一批，一个一个分配，每个span穿成数组链表方便维护，代码挺有意思的，大家可以去看看
+    //创建一个新的span记录这段内存,span是由PageHeapAllocator来创建的，主要也是一下申请一批
+    //，一个一个分配，每个span穿成数组链表方便维护，代码挺有意思的，大家可以去看看
     Span* span = NewSpan(p, ask);
     RecordSpan(span);
-    //Delete做了挺多事情，其实他就是把这个span挂到对应的free_链表下，这里多做的一个东西就是它会先检查一下这个span对应内存左右两边临近内存的span是不是可以合并，如果左右两边的内存当前也没有正在使用，就删掉这些span，并合成一个大的span，小span们之前负责的所有内存页现在都有这个新的span负责，然后再插入free_或者large_中，视大小而定
+    //Delete做了挺多事情，其实他就是把这个span挂到对应的free_链表下，这里多做的一个东西就
+    //是它会先检查一下这个span对应内存左右两边临近内存的span是不是可以合并，如果左右两边
+    //的内存当前也没有正在使用，就删掉这些span，并合成一个大的span，小span们之前负责的所
+    //有内存页现在都有这个新的span负责，然后再插入free_或者large_中，视大小而定
     Delete(span);
     ASSERT(Check());
     return true;

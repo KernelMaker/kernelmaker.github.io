@@ -1,9 +1,6 @@
 ---
-layout: post_layout
-title: redis执行"set aaa bbb"命令后会用多少字节来存储这组键值对?
-time: 2016年05月11日 星期三
-location: 北京
-published: true
+layout: post
+title: redis 一组kv实际内存占用计算
 ---
 
 之前帮公司DBA同事调研Redis内存占用的问题，比如redis在执行一条"set aaa bbb"命令后，这组键值对"aaa" -> "bbb"自身占用6个字节，那为了存储它们redis实际需要占用多少字节呢？本文以redis（tag 2.8.20）和64位机器为参考来一探究竟
@@ -91,7 +88,8 @@ void setKey(redisDb *db, robj *key, robj *val) {
 
 ```cpp
 void dbAdd(redisDb *db, robj *key, robj *val) {
-    sds copy = sdsdup(key->ptr); // 将key的robj转换为对应的sds，在dict中的key用sds的形式存
+    sds copy = sdsdup(key->ptr); // 将key的robj转换为对应的sds，在dict中的key用
+    //sds的形式存
     int retval = dictAdd(db->dict, copy, val);
 
     redisAssertWithInfo(NULL,key,retval == REDIS_OK);

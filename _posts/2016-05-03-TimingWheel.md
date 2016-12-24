@@ -1,9 +1,6 @@
 ---
-layout: post_layout
+layout: post
 title: Timing Wheel
-time: 2016年05月03日 星期二
-location: 哈尔滨
-published: true
 ---
 
 不管是之前做的Bada还是最近在做的Pika，只要是服务端，都面临一个问题：如何有效清除长时间不活动的客户端连接？这个还是很有必要的，现实中保不齐就有用客户端连上服务器后什么都不做，“占着茅坑不拉屎”的现象，其实解决办法很简单，就是对每个客户端的最后请求时间做记录然后定时检查，超过设定时间就关闭连接就可以了，不管是bada，pika，还是redis，实现都很简单，都是在cron里做定期扫描，无意中发现了时间轮盘（Timing Wheel），原理也不难，不过感觉实现起来挺好玩的，以后没准也会把它用在pika中
@@ -16,7 +13,7 @@ published: true
 
 上一节说的原理很简单，不过实现起来的方式有很多的，结合C++的`shared_ptr`和`weak_ptr`，可以很好地实现Timing Wheel，如下图：
 
-<img src="/assets/img/2016-05-03/TimingWheel-pic1.png" width="400px" />
+<img src="/public/images/2016-05-03/TimingWheel-pic1.png" width="400px" />
 
 链表中的每个节点并不是实际Conn对象，而是一个指向Entry的`shared_ptr`，暂且称为EntryPtr，那么什么是Entry呢，他是和Conn相伴相生的struct，结构非常简单，仅包含一个指向Conn对象的`weak_ptr`，另外Conn中还要有一个指向Entry的`weak_ptr`，举个例子，假设在1s链表中，有一个Conn来了新请求，现在需要将它从1s链表移动到10s链表中，怎么做呢？首先Conn中有指向Entry的`weak_ptr`，将它提升成为`shared_ptr`，此时指向这个Entry的shared_ptr的引用计数为2，一个是1s链表中已经存在的EntryPtr，一个是刚刚从`weak_ptr`提升而来，然后将提升得到的`shared_ptr`插入到10s链表里就可以了，注意，此时虽然1s链表中那个指向Entry的`shared_ptr`还在，不过不会有影响，为什么呢？假如又一秒过去，刚才的1s链表被推出，整体淘汰，那么在析构这个shared_ptr指向的Entry是，发现此时引用计数为2，所以不会析构Entry，仅仅是将`shared_ptr`的引用计数减1，直到刚才10s链表析构的时候才会真正析构Entry，在Entry析构时才会真正析构Conn，为什么Conn指向Entry的一定要是`weak_ptr`呢？很简单，如果是`shared_ptr`的话，那么引用计数永远不可能为0，这个Entry永远不会被析构的。
 

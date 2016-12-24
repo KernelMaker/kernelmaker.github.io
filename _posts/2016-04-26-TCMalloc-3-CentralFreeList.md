@@ -1,9 +1,6 @@
 ---
-layout: post_layout
+layout: post
 title: TCMalloc源码学习-3-CentralFreeList
-time: 2016年04月26日 星期二
-location: 北京
-published: true
 ---
 
 这一篇该讲CentralFreeList，CentralFreeList在TCMalloc中扮演一个承上启下的作用，它负责给上层的ThreadCache提供object，并且负责向PageHeap申请页，还是比较重要的，下面慢慢讲
@@ -24,7 +21,8 @@ class CentralFreeList {
 ```cpp
 
 int CentralFreeList::RemoveRange(void **start, void **end, int N) {
-  //这个是上层ThreadCache向本层申请内存时调用的接口，N是要申请多少个object，申请完之后start和end就指向这些object的第一个和最后一个，返回的一批object其实是个链表
+  //这个是上层ThreadCache向本层申请内存时调用的接口，N是要申请多少个object，申请完
+  //之后start和end就指向这些object的第一个和最后一个，返回的一批object其实是个链表
   ASSERT(N > 0);
   lock_.Lock();
   //先从缓存里面找，这里面存着最近被换回来的一批批object
@@ -43,14 +41,16 @@ int CentralFreeList::RemoveRange(void **start, void **end, int N) {
   void* head = NULL;
   void* tail = NULL;
   // TODO: Prefetch multiple TCEntries?
-  //这个函数就是之所以叫safe就是他在从empty_链表里取Span之前，先判断有没有，如果当前已经没有可用的Span，则调用populate向PageHeap申请,返回第一个可用的object的地址
+  //这个函数就是之所以叫safe就是他在从empty_链表里取Span之前，先判断有没有，如果
+  //当前已经没有可用的Span，则调用populate向PageHeap申请,返回第一个可用的object的地址
   tail = FetchFromSpansSafe();
   if (tail != NULL) {
     SLL_SetNext(tail, NULL);
     head = tail;
     result = 1;
     while (result < N) {
-      // 因为需要N个object，所以不断的调用FetchFromSpans，每次获取一个object，将他们连成链表
+      // 因为需要N个object，所以不断的调用FetchFromSpans，每次获取一个object，将
+      // 他们连成链表
       void *t = FetchFromSpans();
       if (!t) break;
       SLL_Push(&head, t);
@@ -76,7 +76,8 @@ int CentralFreeList::RemoveRange(void **start, void **end, int N) {
 //start，end是object链表的头和尾，N是个数
 void CentralFreeList::InsertRange(void *start, void *end, int N) {
   SpinLockHolder h(&lock_);
-  // 如果N等于自己对应的size，将这批object放在缓存里，MakeCacheSpace其实就是如果缓存满了，就从里面踢一条，也就是一批object，把他们还给所属的span
+  // 如果N等于自己对应的size，将这批object放在缓存里，MakeCacheSpace其实就是
+  // 如果缓存满了，就从里面踢一条，也就是一批object，把他们还给所属的span
   if (N == Static::sizemap()->num_objects_to_move(size_class_) &&
     MakeCacheSpace()) {
     int slot = used_slots_++;
@@ -92,7 +93,12 @@ void CentralFreeList::InsertRange(void *start, void *end, int N) {
 }
 
 void CentralFreeList::ReleaseListToSpans(void* start) {
-  //遍历链表，一个一个还，注意数组链表的实现，虽然每个object相邻，但数组序和链表序不应定相同，初次返回一批object给上层的ThreadCache肯定是一样的，但这批object在ThreadCache中分出去的顺序和每个object还回来的顺序不一定一样，所以从ThreadCache还回来的Object链表的链表序不一定和数组序一样，所以链表关系的next值记录在每个object的前四个字节，只要知道start第一个节点，就可以遍历完链表
+  //遍历链表，一个一个还，注意数组链表的实现，虽然每个object相邻，但数组序和
+  //链表序不应定相同，初次返回一批object给上层的ThreadCache肯定是一样的，但
+  //这批object在ThreadCache中分出去的顺序和每个object还回来的顺序不一定一样，
+  //所以从ThreadCache还回来的Object链表的链表序不一定和数组序一样，所以链表
+  //关系的next值记录在每个object的前四个字节，只要知道start第一个节点，就可
+  //以遍历完链表
   while (start) {
     void *next = SLL_Next(start);
     ReleaseToSpans(start);
@@ -107,7 +113,8 @@ void CentralFreeList::ReleaseToSpans(void* object) {
   ASSERT(span->refcount > 0);
 
   // If span is empty, move it to non-empty list
-  //如果所属的span之前已经没有可用的object了，那么肯定会被加到empty链表，现在还了一个，所以将他移回nonempty
+  //如果所属的span之前已经没有可用的object了，那么肯定会被加到empty链表，
+  //现在还了一个，所以将他移回nonempty
   if (span->objects == NULL) {
     tcmalloc::DLL_Remove(span);
     tcmalloc::DLL_Prepend(&nonempty_, span);

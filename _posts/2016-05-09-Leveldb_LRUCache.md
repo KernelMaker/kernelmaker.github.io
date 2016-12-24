@@ -1,9 +1,6 @@
 ---
-layout: post_layout
+layout: post
 title: Leveldb之LRUCache实现
-time: 2016年05月09日 星期一
-location: 北京
-published: true
 ---
 
 leveldb代码读完也有好一阵子了，其实早想好好的写博客从头到尾系统总结一遍，不过它真的是写的太好了，任何一个地方单拿出来都可以写好多，想向TCMalloc那样自下而上写一个系列的话我估计写30篇都写不完...所以就挑着一些主题写写吧，有些是和leveldb强相关的比如迭代器，compact的实现，有些是相对独立、可以用来学习编程的比如LRUCache、SkipList的实现，今天就先说说LRUCache的实现吧
@@ -59,10 +56,15 @@ class HandleTable {
   }
 
   LRUHandle* Insert(LRUHandle* h) {
-    LRUHandle** ptr = FindPointer(h->key(), h->hash); // 先在当前HandleTable中查找有没有包含h->key的LRUHandle，如果有的话则返回保存该LRUHandle地址的内存地址，也就是该LRUHandle的前一个LRUHandle的next字段地址
-    LRUHandle* old = *ptr; //对上一步返回的ptr解引用得到对应LRUHandle地址，也就是之前存在的LRUHandle地址，赋值给old
-    h->next_hash = (old == NULL ? NULL : old->next_hash); // 将h的next_hash赋值为old的next_hash
-    *ptr = h; //将ptr的值也就是对应LRUHandle前一个LRUHandle的next字段赋值为h，这样就将h插入到了桶中，old移出桶
+    LRUHandle** ptr = FindPointer(h->key(), h->hash); // 先在当前HandleTable中
+    //查找有没有包含h->key的LRUHandle，如果有的话则返回保存该LRUHandle地址的内
+    //存地址，也就是该LRUHandle的前一个LRUHandle的next字段地址
+    LRUHandle* old = *ptr; //对上一步返回的ptr解引用得到对应LRUHandle地址，也
+    //就是之前存在的LRUHandle地址，赋值给old
+    h->next_hash = (old == NULL ? NULL : old->next_hash); // 将h的next_hash赋
+    //值为old的next_hash
+    *ptr = h; //将ptr的值也就是对应LRUHandle前一个LRUHandle的next字段赋值为h，
+    //这样就将h插入到了桶中，old移出桶
     if (old == NULL) {
       ++elems_;
       if (elems_ > length_) {
@@ -95,7 +97,8 @@ class HandleTable {
   // Return a pointer to slot that points to a cache entry that
   // matches key/hash.  If there is no such cache entry, return a
   // pointer to the trailing slot in the corresponding linked list.
-  // 通过hash值在对应桶中查找key，注意：如果存在则返回保存改LRUHandle地址的内存地址，不存在则返回空
+  // 通过hash值在对应桶中查找key，注意：如果存在则返回保存改LRUHandle地址的
+  //内存地址，不存在则返回空
   LRUHandle** FindPointer(const Slice& key, uint32_t hash) {
     LRUHandle** ptr = &list_[hash & (length_ - 1)];
     while (*ptr != NULL &&
@@ -170,7 +173,8 @@ class LRUCache {
 
   // Dummy head of LRU list.
   // lru.prev is newest entry, lru.next is oldest entry.
-  LRUHandle lru_; //lru list的head节点，今后prev指向最新节点，next指向最老节点，每次淘汰next，初始都指向自己
+  LRUHandle lru_; //lru list的head节点，今后prev指向最新节点，next指向
+  //最老节点，每次淘汰next，初始都指向自己
 
   HandleTable table_; //包含一个HandleTable
 };
@@ -217,7 +221,11 @@ Cache::Handle* LRUCache::Insert(
     void (*deleter)(const Slice& key, void* value)) {
   MutexLock l(&mutex_);
   
-  //LRUHandle中key_data是最后一个元素，定义是char[1]，这里有一个技巧，就是定义中虽然key_data长度为1个字节，但在实际生成时，malloc的空间大小是sizeof(LRUHandle)-1 + key.size()，刚好key_data是最后一个元素，这样从它开始以后的空间是实际存放key的位置，对于结构体中变长字符数组的定义可以学习这样的方式，很不错
+  //LRUHandle中key_data是最后一个元素，定义是char[1]，这里有一个技巧，就是
+  //定义中虽然key_data长度为1个字节，但在实际生成时，malloc的空间大小是
+  //sizeof(LRUHandle)-1 + key.size()，刚好key_data是最后一个元素，这样从它
+  //开始以后的空间是实际存放key的位置，对于结构体中变长字符数组的定义可以
+  //学习这样的方式，很不错
   LRUHandle* e = reinterpret_cast<LRUHandle*>(
       malloc(sizeof(LRUHandle)-1 + key.size()));
   e->value = value;
@@ -225,13 +233,15 @@ Cache::Handle* LRUCache::Insert(
   e->charge = charge;
   e->key_length = key.size();
   e->hash = hash;
-  e->refs = 2;  // One from LRUCache, one for the returned handle，引用计数初始为2，一个是LRUCache在用，一个是返回给用户
+  e->refs = 2;  // One from LRUCache, one for the returned handle，引用计数
+  //初始为2，一个是LRUCache在用，一个是返回给用户
   memcpy(e->key_data, key.data(), key.size());
   //插入到lru_的prev位置，最低淘汰优先级
   LRU_Append(e);
   usage_ += charge;
 
-  LRUHandle* old = table_.Insert(e); //将e插入到HandleTable中，返回的是存放该key老值的LRUHandle指针
+  LRUHandle* old = table_.Insert(e); //将e插入到HandleTable中，返回的是存放
+  //该key老值的LRUHandle指针
   if (old != NULL) {
     //老的LRUHandle已经没用，从lru_中移除
     LRU_Remove(old);
@@ -284,7 +294,8 @@ class ShardedLRUCache : public Cache {
   virtual Handle* Insert(const Slice& key, void* value, size_t charge,
                          void (*deleter)(const Slice& key, void* value)) {
     const uint32_t hash = HashSlice(key); //求hash
-    return shard_[Shard(hash)].Insert(key, hash, value, charge, deleter); //插入到对应的LURCache中
+    return shard_[Shard(hash)].Insert(key, hash, value, charge, deleter); //插入
+    //到对应的LURCache中
   }
   virtual Handle* Lookup(const Slice& key) {
     const uint32_t hash = HashSlice(key); //求hash

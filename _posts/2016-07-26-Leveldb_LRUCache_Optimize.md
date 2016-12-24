@@ -1,9 +1,6 @@
 ---
-layout: post_layout
+layout: post
 title: Leveldb之对LRUCache优化
-time: 2016年07月26日 星期二
-location: 北京
-published: true
 ---
 
 昨天看到leveldb近期内有一条commit：`fix problems in LevelDB's caching code`，话说之前自己有一篇博客总结了leveldb cache的实现，既然这次它有了这方面的更新，那么就接着写一篇，总结一下cache方面的更新吧

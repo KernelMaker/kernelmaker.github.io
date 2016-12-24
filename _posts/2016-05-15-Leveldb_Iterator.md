@@ -1,9 +1,6 @@
 ---
-layout: post_layout
+layout: post
 title: Leveldb之Iterator总结
-time: 2016年05月15日 星期日
-location: 北京
-published: true
 ---
 
 看过leveldb代码的同学应该对Iterator这个词不陌生，代码中从基类继承出各种各样的Iterator，满眼看去全是Iterator，前期学习不免眼花缭乱，本篇对这些Iterator进行总结，通过捋清它们之间的关系来绘制出全局的Iterator实现
@@ -19,7 +16,7 @@ published: true
 
 首先给出leveldb中主要Iterator的关系图，这个图是当用户调用NewIterator接口后的过程图，其中虚线方块是调用接口名，实线方块则是各个Iterator了，先粗略看一下，结合下面的讲述，再回过头来看这个图就能有更深的理解：
 
-<img src="/assets/img/2016-05-15/LeveldbIterator-pic1.png" width="800px" />
+<img src="/public/images/2016-05-15/LeveldbIterator-pic1.png" width="800px" />
 
 ## 分类
 

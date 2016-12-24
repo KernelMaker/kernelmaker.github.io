@@ -1,10 +1,6 @@
 ---
-layout: post_layout
+layout: post
 title: TCMalloc源码学习-1-介绍
-time: 2016年04月23日 星期六
-location: 北京
-published: true
-excerpt_separator: "##"
 ---
 
 前阵子帮公司DBA同事调研redis实际内存占用的问题，翻遍redis代码从代码逻辑层面算出了一个string的entity占用多少字节，不过这只是站在redis角度来看它为了这个entity向系统申请多少个字节，但他用的是JEMalloc或者TCMalloc来申请，之前没有了解过这里，一直觉得很easy，直到从redis代码一路跟进去，尼玛，原来也有不少东西，所以感觉很有必要学习一下，刚好TCMalloc的风格和leveldb是极像的，带着对Sanjay Ghemawat膜拜之情，决定先从TCMalloc入手，看看他到底是怎么做的
@@ -121,5 +117,3 @@ static inline int ClassIndex(int s) {
 
 ## 总结
 尼玛，这一章我本来只是打算简单介绍一下TCMalloc的，小内存、大内存的分配点到为止，可是这里的细节不说透，后面代码分析便没有意义，啰啰嗦嗦的算是说完啦，后面我会从下向上重点介绍`page_heap`，`central_freelist`，`thread_cache`的实现，然后再从用户接口串一下整体，下篇见^^
-
-***ps*** : 对了,我github pages用的jekyll scheme是从这位[liungkejin](http://liungkejin.github.io/)同学那扒过来的，不过他好像是参考了这位[ddbullfrog](http://ddbullfrog.github.io/resumecard/)同学，不管怎么样，还是感谢二位，Thanks^^

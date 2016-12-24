@@ -1,9 +1,6 @@
 ---
-layout: post_layout
+layout: post
 title: TCMalloc源码学习-5-总结
-time: 2016年04月28日 星期四
-location: 北京
-published: true
 ---
 
 前面几篇分别介绍了TCMalloc的整体，PageHeap，CentralFreeList和ThreadCache，这一篇介绍一下最上层的用户接口，其实只要理解了前面的所有结构，用户接口的实现就非常好理解了
@@ -60,7 +57,8 @@ inline void* do_malloc_pages(ThreadCache* heap, size_t size) {
     SpinLockHolder h(Static::pageheap_lock());
     //从PageHeap中申请需要的页数
     Span* span = Static::pageheap()->New(num_pages);
-    //将返回的大内存的首页号缓存到PageHeap的pagemap_cache，对应的cl是0，这个0会在将来还这块内存的时候表明这是个大内存
+    //将返回的大内存的首页号缓存到PageHeap的pagemap_cache，对应的cl是0，这个0会
+    //在将来还这块内存的时候表明这是个大内存
     result = (span == NULL ? NULL : SpanToMallocResult(span));
     report_large = should_report_large(num_pages);
   }
@@ -104,7 +102,8 @@ inline void do_free_with_callback(void* ptr, void (*invalid_free_fn)(void*)) {
   size_t cl = Static::pageheap()->GetSizeClassIfCached(p);
 
   if (cl == 0) {
-    //这里cl等于0有两种情况，一种是页p没有在pagemap_cache中找到默认返回0，另一种是页p对应的是大内存的首页，所以当初存的cl就是0
+    //这里cl等于0有两种情况，一种是页p没有在pagemap_cache中找到默认返回0，
+    //另一种是页p对应的是大内存的首页，所以当初存的cl就是0
     span = Static::pageheap()->GetDescriptor(p);
     if (!span) {
       // span can be NULL because the pointer passed in is invalid
