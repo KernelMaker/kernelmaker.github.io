@@ -9,13 +9,13 @@ title: Rocksdb实现及优化分析 1
 
 ## 1. JoinBatchGroup
 
-这个函数主要做什么呢，其实在之前分析leveldb的博客中也讲过，leveldb和rocksdb都支持多线程，不过对于Write是单写者的实现，这就需要使用类似队列的东西将上层多线程的多个Write进行排列，每次只允许队列头的WriteBatch写db，队头WriteBatch写完后再唤醒队列其他的WriteBatch。leveldb在这里有一个优化，就是队头WriteBatch在写db时，并不是只将自己的WriteBatch写完就拉倒，而是在写之前先将自己和它之后正在等待的其他WriteBatch一起打包成一个更大的WriteBatch，然后一起再写，这样，当它写完db唤醒其他WriteBatch后，有一部分WriteBatch会发现自己的活已经被做完了，直接返回。这样的实现可以提高写入速度，算是一个不小的优化。那么问题来了，rocksdb基于这之上还能做哪些优化呢？
+这个函数主要做什么呢，其实在之前分析leveldb的博客中也讲过，leveldb和rocksdb都支持多线程，不过对于Write是单写者的实现，这就需要使用类似队列的东西将上层多线程的多个Writer进行排列，每次只允许队列头的Writer写db，队头Writer写完后再唤醒队列其他的Writer。leveldb在这里有一个优化，就是队头Writer在写db时，并不是只将自己的WriteBatch写完就拉倒，而是在写之前先将自己和它之后正在等待的其他Writer的WriteBatch一起打包成一个更大的WriteBatch，然后一起再写，这样，当它写完db唤醒其他Writer后，有一部分Writer会发现自己的活已经被做完了，直接返回。这样的实现可以提高写入速度，算是一个不小的优化。那么问题来了，rocksdb基于这之上还能做哪些优化呢？
 
 
 
 ## 2. 优化点
 
-rocksdb在WriteBatch之间Wait的地方做了优化，先看下leveldb这块是怎么做的：
+rocksdb在Writer之间Wait的地方做了优化，先看下leveldb这块是怎么做的：
 
 ```c++
 Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
@@ -36,7 +36,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
 
 > For reference, on my 4.0 SELinux test server with support for syscall auditing enabled, the minimum latency between FUTEX_WAKE to returning from FUTEX_WAIT is 2.7 usec, and the average is more like 10 usec.  That can be a big drag on RockDB's single-writer design.
 
-从FUTEX_WAIT到FUTEX_WAKE平均需要10ms的时间，这对于单写着的引擎来说，代价的确不小，因外除过真正写引擎的时间，还有很大一部分时间用在了pthread_cond_wait及pthread_cond_signal上。
+从FUTEX_WAIT到FUTEX_WAKE平均需要10us的时间，这对于单写着的引擎来说，代价的确不小，因外除过真正写引擎的时间，还有很大一部分时间用在了pthread_cond_wait及pthread_cond_signal上。
 
 
 
@@ -54,7 +54,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
 
 ### 1. Loop
 
-这里主要就是通过循环忙等待一段有限的时间，大约1ms，绝大多数的情况下，这1ms的忙等足以让state条件满足（Leader WriteBatch执行完），而忙等待是占着CPU，不会发生Context Switches，这就减小了额外开销；
+这里主要就是通过循环忙等待一段有限的时间，大约1us，绝大多数的情况下，这1us的忙等足以让state条件满足（Leader Writer的WriteBatch执行完），而忙等待是占着CPU，不会发生Context Switches，这就减小了额外开销；
 
 ```c++
   // On a modern Xeon each loop takes about 7 nanoseconds (most of which
@@ -70,7 +70,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
   }
 ```
 
-实现非常简单，循坏200次（大约1ms），每次循环判断条件是否满足，满足则返回。有个地方值得注意：
+实现非常简单，循坏200次（大约1us），每次循环判断条件是否满足，满足则返回。有个地方值得注意：
 
 ```
 port::AsmVolatilePause();
@@ -96,7 +96,7 @@ pause指令，查了一下文档，如下：
 
 可以看出，pause指令主要就是提升spin-wait-loop的性能，当执行spin-wait的时候处理器会在退出循坏的时候检测到memory order violation而进行流水线重排，造成性能损失，pause指定则是告诉cpu，当前正处在spin-wait中，绝大多数情况下，处理器根据这个提示来避免violation，提高性能。
 
-结合rocksdb，发现上面的200次循环中每次都会加锁load state变量，检查是否符合条件，再放锁，当Leader WriteBatch执行完，修改了这个state变量时，会产生store指令，由于处理器是乱序执行的，当有了store指令后，需要重排流水线确保在store之后的load指令在执行store之后再执行，而重排会带来25倍左右的性能损失。pause指令其实就是延迟40左右个clock，这样可以尽可能减少流水线上的load指令，减少重排代价。
+结合rocksdb，发现上面的200次循环中每次都会load state变量，检查是否符合条件，当Leader Writer的WriteBatch执行完，修改了这个state变量时，会产生store指令，由于处理器是乱序执行的，当有了store指令后，需要重排流水线确保在store之后的load指令在执行store之后再执行，而重排会带来25倍左右的性能损失。pause指令其实就是延迟40左右个clock，这样可以尽可能减少流水线上的load指令，减少重排代价。
 
 另外pause指令还可以减少处理器能耗，不过这不是我们关心的。
 
@@ -137,7 +137,7 @@ pause指令，查了一下文档，如下：
       }
 ```
 
-和Loop一样，还是循环判断state条件是否满足，满足则跳出循环，不满足则std::this_thread::yield()来主动让出时间片，这里的循环不是无止境的，最多持续max_yield_usec_微秒（默认0ms，需要用enable_write_thread_adaptive_yield=true来打开，打开后默认是100ms）。这么做是可取的，因为yield并不一定会发生Context Switches，如果线程数小于CPU的core数, 也就是每个core上只有一个线程的时候，是不会发生Context Switches，花费差不多不到1ms。不同于Loop每次固定循环200次，Short-Wait循环的上限是100ms，这100ms使用CPU的高占用(involuntary context switches)来换取rocksdb可能的高吞吐，如果很不幸每次100ms后state还没有满足条件而进去最后的Long-Wait，那么这100ms做了很多无谓的Context Switches，消耗了CPU。有没有什么办法来动态判断在Short-Wait中是否需要break出循环直接进行Long-Wait呢？rocksdb是通过yield的持续时长来做的调整，如果yield前后间隔大于1ms，并且累计3次，则认为yield已经慢到足够可以通过直接Long-Wait来等待而不用进行无谓的yield。
+和Loop一样，还是循环判断state条件是否满足，满足则跳出循环，不满足则std::this_thread::yield()来主动让出时间片，这里的循环不是无止境的，最多持续max_yield_usec_ us（默认0us，需要用enable_write_thread_adaptive_yield=true来打开，打开后默认是100us）。这么做是可取的，因为yield并不一定会发生Context Switches，如果线程数小于CPU的core数, 也就是每个core上只有一个线程的时候，是不会发生Context Switches，花费差不多不到1us。不同于Loop每次固定循环200次，Short-Wait循环的上限是100us，这100us使用CPU的高占用(involuntary context switches)来换取rocksdb可能的高吞吐，如果很不幸每次100us后state还没有满足条件而进去最后的Long-Wait，那么这100us做了很多无谓的Context Switches，消耗了CPU。有没有什么办法来动态判断在Short-Wait中是否需要break出循环直接进行Long-Wait呢？rocksdb是通过yield的持续时长来做的调整，如果yield前后间隔大于3us，并且累计3次，则认为yield已经慢到足够可以通过直接Long-Wait来等待而不用进行无谓的yield。
 
 另外，进不进行Short-Wait其实也是有条件的，如下：
 
@@ -189,6 +189,6 @@ uint8_t WriteThread::BlockingAwaitState(Writer* w, uint8_t goal_mask) {
 
 1. leveldb的一条pthread_cond_wait被rocksdb扩展出这么多的步骤及策略，目的还是为了尽可能的优化性能。的确，基础服务写的好不好直接决定着上层应用的性能，对于可能存在的瓶颈一定要吃透直到最优。自己之前写代码也基本没有考虑过Context Switches带来的性能损耗，是有必要想rocksdb一样回头看看自己写的代码是不是有可以优化的地方
 2. 内核的学习也很重要，只有知道底层怎么实现才能知道使用各种调用有什么利弊，如何权衡利用。不过个人不太认同上来就盲目看内核代码及实现的方式，即使看完也体会不深，如果找不到应用场景大多数时候只能纸上谈兵，参与到底层基础服务的开发和学习中，前期实现为主，以实现功能为目标作出服务，直到自己开发功力积累到足够多的时候，也就是上层功能已经足够完善的时候，这才需要极致的击破性能瓶颈点，这时候带着目的去看内核具体模块的实现，然后运用到实践中，这样反馈更好，学习的更深入。向rocksdb学优化，应用到pika和zeppline上来，哈哈
-3. rocksdb默认是没有打开Short-Wait的，需要通过配置项enable_write_thread_adaptive_yield = true来打开，打开后，max_yield_usec_默认是100ms，可以通过配置项write_thread_slow_yield_usec来调整，增大它就是靠消耗更多CPU（Short-Wait持续时间越长）来提高rocksdb的吞吐。另外slow_yield_usec\_默认是1ms，可以通过配置项write_thread_slow_yield_usec来调整，增大它则会导致slow_yield_usec\_门槛变高，减少Short-Wait半路break出去直接进行Long-Wait的概率，同样是用CPU来换吞吐。
+3. rocksdb默认是没有打开Short-Wait的，需要通过配置项enable_write_thread_adaptive_yield = true来打开，打开后，max_yield_usec_默认是100us，可以通过配置项write_thread_slow_yield_usec来调整，增大它就是靠消耗更多CPU（Short-Wait持续时间越长）来提高rocksdb的吞吐。另外slow_yield_usec\_默认是3us，可以通过配置项write_thread_slow_yield_usec来调整，增大它则会导致slow_yield_usec\_门槛变高，减少Short-Wait半路break出去直接进行Long-Wait的概率，同样是用CPU来换吞吐。
 
 **PS:** 今天是2016年最后一天，这一年收货颇多，希望自己在2017可以有更快更好更大的进步，也希望生活可以更加顺顺顺，实现自己2017年的所有目标\(^o^)/~
