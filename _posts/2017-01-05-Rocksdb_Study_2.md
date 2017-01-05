@@ -41,7 +41,7 @@ void Func(int num) {
   pthread_setspecific(key, ptr);
   std::cout << "Thread " << std::this_thread::get_id() << " set key to " 
     		<< ptr->num_ << ", object addr = " << ptr << std::endl;
-  std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  std::this_thread::sleep_for(std::chrono::milliseconds(2000));
   std::cout << "Thread " << std::this_thread::get_id() << " get key: " 
     		<< static_cast<Content *>(pthread_getspecific(key))->num_ 
     		<< ", object addr =  " << pthread_getspecific(key) << std::endl;
@@ -65,13 +65,13 @@ int main(void)
 输出如下：
 
 ```
-Thread 140502097086208 set key to 6, object addr = 0x7fc92c0008c0
-Thread 140502097086208 get key: 6, object addr =  0x7fc92c0008c0
-OnThreadExit for thread 140502097086208
+Thread 139729139767040 set key to 6, object addr = 0x7f15340008c0
+Thread 139729129277184 set key to 8, object addr = 0x7f152c0008c0
+Thread 139729139767040 get key: 6, object addr =  0x7f15340008c0
+OnThreadExit for thread 139729139767040
 Destroy Content, whose num_ is 6
-Thread 140502086596352 set key to 8, object addr = 0x7fc92c0008c0
-Thread 140502086596352 get key: 8, object addr =  0x7fc92c0008c0
-OnThreadExit for thread 140502086596352
+Thread 139729129277184 get key: 8, object addr =  0x7f152c0008c0
+OnThreadExit for thread 139729129277184
 Destroy Content, whose num_ is 8
 Bye!
 ```
