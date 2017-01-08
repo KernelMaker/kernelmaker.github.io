@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Rocksdb实现及优化分析 2
+title: Rocksdb实现及优化分析 ThreadLocalPtr
 ---
 
 在下一篇写rocksdb关于读优化之前，先铺垫一片基础，关于thread-specific data（线程私有存储），之前博客讲tcmalloc的ThreadCache的时候也有提到过，rocksdb也正是用了线程私有存储来优化读性能，具体的优化先卖个关子，下篇再说，本篇先总结一下rocksdb对线程私有存储的封装，很实用。
