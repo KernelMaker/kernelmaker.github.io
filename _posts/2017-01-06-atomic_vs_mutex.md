@@ -50,7 +50,8 @@ int main() {
     		<< diff.count() << std::endl;
 
   begin = std::chrono::steady_clock::now();
-  while (atomic_fetch_add(&a_count, 1) < kNum-1) {
+  while (a_count.fetch_add(1, std::memory_order_relaxed) < kNum-1) {
+    //对计数的场景，这里使用std::memory_order_relaxed更合适，性能更高
   };
   end = std::chrono::steady_clock::now();
   diff = end - begin;
@@ -65,21 +66,21 @@ int main() {
 跑了3次，结果如下（单位纳秒）：
 
 ```
-count = 10000000, Mutex used: 271563633
-a_count = 10000000, Atomic used: 146294002
+count = 10000000, Mutex used: 268739652
+a_count = 10000000, Atomic used: 114195449
 ```
 
 ```
-count = 10000000, Mutex used: 270522626
-a_count = 10000000, Atomic used: 146545957
+count = 10000000, Mutex used: 271568003
+a_count = 10000000, Atomic used: 114331315
 ```
 
 ```
-count = 10000000, Mutex used: 276641865
-a_count = 10000000, Atomic used: 144871307
+count = 10000000, Mutex used: 271557151
+a_count = 10000000, Atomic used: 112725464
 ```
 
-可以看到Mutex大概是Atomic的2倍，符合预期，看过一个哥们2008写的测试，Mutex用时是Atomic的3倍，我这里没有跑出来3倍的结果。
+可以看到Mutex大概是Atomic的接近3倍倍，符合预期，看过一个哥们2008写的测试，Mutex用时也是Atomic的3倍。
 
 perf看下，结果如下：
 
