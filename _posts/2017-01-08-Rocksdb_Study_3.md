@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Rocksdb实现分析及优化 allow_concurrent_memtable_write
+title: 【Rocksdb实现分析及优化】 allow_concurrent_memtable_write
 ---
 
 前面的写[博客](http://kernelmaker.github.io/Rocksdb_Study_1)总结过Rocksdb在JoinBatchGroup那里做的很细致的优化，来减少Writer在AwaitState的消耗。今天刚好有时间，所以测了一下这快优化的效果，刚好看到它有一个allow_concurrent_memtable_write的配置项，开启后可以并发写memtable，所以这篇先介绍下这个配置项原理及实现，再给出测试结果

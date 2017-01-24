@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Rocksdb实现分析及优化 Write及Flush实现
+title: 【Rocksdb实现分析及优化】 Write及Flush实现
 ---
 
 最近缕了一下Rocksdb的Write和Flush逻辑，实现的非常细致，外加ColumnFamily，导致这块代码逻辑巨多，还好，这两天把这块的东西缕出来画了两幅图，方便以后可以快速回忆

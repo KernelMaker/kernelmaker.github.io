@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Rocksdb实现及优化分析 JoinBatchGroup
+title: 【Rocksdb实现及优化分析】 JoinBatchGroup
 ---
 
 最近在精读rocksdb代码，对比之前看过的leveldb，发现rocksdb几乎在所有地方都做了非常细致的优化，感觉还是非常值得细读的，每个地方深入下去总会有意想不到的收获，所以打算今后长期持续的学习总结rocksdb。level和rocksdb，前者是更像是LSM和C++ 98的学习教科书，如果想深入搞引擎，还是rocksdb做的更细致更具体，总结一句话：跟leveldb学C++，跟rocksdb学做引擎，吼吼~ 这篇就一个很小的点（JoinBatchGroup）来展看，看看rocksdb是怎么做优化的
