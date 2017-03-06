@@ -62,13 +62,12 @@ base_options.max_open_files = 2048;
 BlockBasedTableOptions block_based_table_options;
 /*
  * 使用512K的block size，修改block_size主要是为了减少index block的大小
- * 但鉴于本例中单条value很大，其实效果不明显，所以这个可改改不改
+ * 但鉴于本例中单条value很大，其实效果不明显，所以这个可改可不改
  */
 block_based_table_options.block_size = 512 * 1024 * 1024;
 
-base_options.table_factory.reset(NewBlockBasedTableFactory(block_based_table_options));
-
-
+base_options.table_factory.reset(
+  NewBlockBasedTableFactory(block_based_table_options));
 ```
 
 以上差不多就是最需要改动的options了，前期使用这样的配置在线上跑，可以看到在不计table_cache内存消耗的情况下，以上配置会占用28G左右内存，不过table_cache向来都是内存占用大户，所以下面的配置项则可以根据线上实际效果酌情修改：
