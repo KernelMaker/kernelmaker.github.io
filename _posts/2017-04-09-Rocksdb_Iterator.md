@@ -34,9 +34,14 @@ title: 【Rocksdb实现分析及优化】Iterator
 这不是一个标准的类图，不过就和我总结ColumnFamily那张一样，主要是为了理清各个类之间的关系，此处有几点说明：
 
 1. 可以看到对内和对外的Iterator类定义是分开的（只是有一个公共父类Cleanable），对外Iterator包含对内Iterator
+
 2. 实线空心箭头代表继承
+
 3. 实线实心箭头代表类似包含的关系
-4. 虚线实心箭头：类似间接包含关系，因为MergeIterator中并不是直接包含各个子Iterator（MemTableIterator，TwoLevelIterator），而是通过IteratorWrapper把每个子Iterator包了一层，所以这里应该还有一个虚线实心箭头从MergeIterator连到MemtableIterator，只不过画不下了，特此说明。（我的画图布局能力真是汗|||）
+
+4. 虚线实心箭头：类似间接包含关系，因为MergeIterator中并不是直接包含各个子Iterator（MemTableIterator，TwoLevelIterator），而是通过IteratorWrapper把每个子Iterator包了一层，所以这里应该还有一个虚线实心箭头从MergeIterator连到MemtableIterator，只不过画不下了，特此说明。（我的画图布局能力真是汗\|\|\|）
+
+   ​
 
 <img src="/public/images/2017-04-09/2.png" width="800px" />
 
