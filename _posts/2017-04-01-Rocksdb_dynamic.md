@@ -64,7 +64,7 @@ title: 【Rocksdb实现分析及优化】level_compaction_dynamic_level_bytes
 
 ### 1. 原理
 
-如果打开level_compaction_dynamic_level_bytes，则base_level会从默认的Level 1 变成 Level 6，即最开始Level 0会直接compact到Level 6，如果某次compact后，Level 6大小超过256M(target_file_size_base)，假设300M，则base_level向上调整，此时base_level变成Level 5，而Level 5的大小上限是300M/10 = 30M，之后Level 0会直接compact到Level 5，如果Level 5超过30M，假设50M，则需要与Level 6进行compact，compact后，Level 5恢复到30M以下，Level 6稍微变大，假设320M，则基于320M继续调整base_level，及Level 5的大小上限，调整为320M/10 = 32M，随着写入持续进行，最终Level 5会超过256M(target_file_size_base)，此时base_level需要继续上调，到Level 4，取Level 5和Level 6当前大小较大者，记为MaxSize，则Level 4的大小上限为MaxSize/100，Level 5的大小上限为Level 4大小上限乘以10，依次类推。
+如果打开level_compaction_dynamic_level_bytes，则base_level会从默认的Level 1 变成最高层 Level 6，即最开始Level 0会直接compact到Level 6，如果某次compact后，Level 6大小超过256M(target_file_size_base)，假设300M，则base_level向上调整，此时base_level变成Level 5，而Level 5的大小上限是300M/10 = 30M，之后Level 0会直接compact到Level 5，如果Level 5超过30M，假设50M，则需要与Level 6进行compact，compact后，Level 5恢复到30M以下，Level 6稍微变大，假设320M，则基于320M继续调整base_level，即Level 5的大小上限，调整为320M/10 = 32M，随着写入持续进行，最终Level 5会超过256M(target_file_size_base)，此时base_level需要继续上调，到Level 4，取Level 5和Level 6当前大小较大者，记为MaxSize，则Level 4的大小上限为MaxSize/100，Level 5的大小上限为Level 4大小上限乘以10，依次类推。
 
 ### 2. 实现
 
