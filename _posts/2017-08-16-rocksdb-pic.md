@@ -1,6 +1,6 @@
 ---
 layout: post
-title: 【Rocksdb实现及优化分析】画了几张rocksdb的图
+title: 【Rocksdb实现分析及优化】画了几张rocksdb的图
 ---
 
 这两天借着部门分享，做了几张rocksdb的图，放博客里吧。
