@@ -23,7 +23,11 @@ uint64_t wal_bytes_per_sync = 0;
 
 WAL操作类从上到下的封装如下：
 
-```
+
+
+
+
+```cpp
 log::Write
 
 WritableFileWriter
@@ -35,7 +39,7 @@ fd
 
 另外，在创建WAL之前，首先会有一个调用如下
 
-```
+```cpp
   EnvOptions OptimizeForLogWrite(const EnvOptions& env_options,
                                  const DBOptions& db_options) const override {
     EnvOptions optimized = env_options;
@@ -49,7 +53,7 @@ fd
 
 可以看到，这里会不用direct_io和mmap打开文件，然后将用户配置的wal_bytes_per_sync赋值给EnvOptions，然后调用
 
-```
+```cpp
 s = NewWritableFile(
             env_, LogFileName(immutable_db_options_.wal_dir, new_log_number),
             &lfile, opt_env_opt);
@@ -59,7 +63,7 @@ s = NewWritableFile(
 
 这里有个细节，上面的optimized.fallocate_with_keep_size = true是干什么用的呢，等会说。在构造好lfile后，会根据write_buffer_manager、db_write_buffer_size和max_total_wal_size的配置大小算出一个合理值，将它赋值给lfile的preallocation_block_size_。这个又是干什么用的呢，原来在调用file_writer->Append时，会调用lfile->PrepareWrite，它里面会根据preallocation_block_size\_的算出offset和len，传入Allocate，Allocate实现如下：
 
-```
+```cpp
 #ifdef ROCKSDB_FALLOCATE_PRESENT
 Status PosixWritableFile::Allocate(uint64_t offset, uint64_t len) {
   assert(offset <= std::numeric_limits<off_t>::max());
@@ -85,13 +89,27 @@ Status PosixWritableFile::Allocate(uint64_t offset, uint64_t len) {
 
 man 2一下fallocate
 
-> fallocate() allows the caller to directly manipulate the allocated disk space for the file referred to by fd for the byte range starting at offset and continuing for len bytes.
+> fallocate() allows the caller to directly manipulate the allocated disk space
+>
+> for the file referred to by fd for the byte range starting at offset and
+>
+> continuing for len bytes.
+>
+> 
 >
 > FALLOC_FL_KEEP_SIZE
 >
->               This  flag allocates and initializes to zero the disk space within the range specified by offset and len.  After a successful call, subsequent writes into this range are guaranteed not to fail because
->               of lack of disk space.  Preallocating zeroed blocks beyond the end of the file is useful for optimizing append workloads.  Preallocating blocks does not change the file size (as reported  by  stat(2))
->               even if it is less than offset+len.
+> This  flag allocates and initializes to zero the disk
+> space within the range specified by offset and len. 
+> After a successful call, subsequent writes into this
+> range are guaranteed not to fail because
+> of lack of disk space.  Preallocating zeroed blocks
+> beyond the end of the file is useful for optimizing 
+> append workloads.  
+> ​              
+> Preallocating blocks does not change the file size
+> (as reported  by  stat(2))
+> even if it is less than offset+len.
 
 这里就明了了，其实就给预分配空间（比如分配write_buffer_size大小的空间），确保对fd的写入不会因为磁盘空间不足而失败，所以刚才提问的optimized.fallocate_with_keep_size = true其实就是此处的FALLOC_FL_KEEP_SIZE，有了它，fallocate即使offset大于当前文件大小，也不会改变文件大小。
 
@@ -107,7 +125,7 @@ man 2一下fallocate
 
 如果对数据安全性要求特别高，可以在Put或者Write是，配置WriteOptions::sync = true，这样在写完日志后会立刻刷盘，实现如下：
 
-```
+```cpp
 Status DBImpl::WriteToWAL(const WriteThread::WriteGroup& write_group,
                           log::Writer* log_writer, uint64_t* log_used,
                           bool need_log_sync, bool need_log_dir_sync,
@@ -156,7 +174,7 @@ wal_bytes_per_sync到底在底下怎么做的呢，有必要看一下。
 
 接着来，写如PageCache后，file_writer->Flush还会做如下逻辑：
 
-```
+```cpp
 Status WritableFileWriter::Flush() {
   ......
   
