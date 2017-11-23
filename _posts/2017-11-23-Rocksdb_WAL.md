@@ -23,10 +23,6 @@ uint64_t wal_bytes_per_sync = 0;
 
 WAL操作类从上到下的封装如下：
 
-
-
-
-
 ```cpp
 log::Write
 
@@ -41,7 +37,8 @@ fd
 
 ```cpp
   EnvOptions OptimizeForLogWrite(const EnvOptions& env_options,
-                                 const DBOptions& db_options) const override {
+                                 const DBOptions& db_options) 
+                                 const override {
     EnvOptions optimized = env_options;
     optimized.use_mmap_writes = false;
     optimized.use_direct_writes = false;
@@ -80,7 +77,8 @@ Status PosixWritableFile::Allocate(uint64_t offset, uint64_t len) {
     return Status::OK();
   } else {
     return IOError(
-        "While fallocate offset " + ToString(offset) + " len " + ToString(len),
+        "While fallocate offset " + ToString(offset) + " len " +
+         ToString(len),
         filename_, errno);
   }
 }
@@ -179,7 +177,8 @@ Status WritableFileWriter::Flush() {
   ......
   
   if (!use_direct_io() && bytes_per_sync_) {
-    const uint64_t kBytesNotSyncRange = 1024 * 1024;  // recent 1MB is not synced.
+    const uint64_t kBytesNotSyncRange = 1024 * 1024;  // recent 1MB
+                                                      // is not synced.
     const uint64_t kBytesAlignWhenSync = 4 * 1024;    // Align 4KB.
     if (filesize_ > kBytesNotSyncRange) {
       uint64_t offset_sync_to = filesize_ - kBytesNotSyncRange;
