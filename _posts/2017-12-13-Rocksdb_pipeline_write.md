@@ -3,7 +3,7 @@ layout: post
 title: 【Rocksdb实现分析及优化】enable_pipelined_write
 ---
 
-rocksdb v5.5.1的配置项中多了一个enable_pipelined_write，REALESE中描述如下：
+rocksdb v5.5.1的配置项中多了一个enable_pipelined_write，RELEASE中描述如下：
 
 > New option enable_pipelined_write which may improve write throughput in case writing from multiple threads and WAL enabled.
 
@@ -53,9 +53,9 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
 
 ```cpp
 Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
-                                  WriteBatch* my_batch, WriteCallback* callback,
-                                  uint64_t* log_used, uint64_t log_ref,
-                                  bool disable_memtable, uint64_t* seq_used) {
+                               WriteBatch* my_batch, WriteCallback* callback,
+                               uint64_t* log_used, uint64_t log_ref,
+                               bool disable_memtable, uint64_t* seq_used) {
   ......
   // 1. 入队列newest_writer(不是leader则阻塞等待被唤醒)
   write_thread_.JoinBatchGroup(&w);
