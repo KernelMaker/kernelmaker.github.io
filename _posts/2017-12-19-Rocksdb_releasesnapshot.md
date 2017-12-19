@@ -7,7 +7,7 @@ title: 【Rocksdb实现分析及优化】recompact bottommost files after releas
 
 >Upon snapshot release, recompact bottommost files containing deleted/overwritten keys that previously could not be dropped due to the snapshot. This alleviates space-amp caused by long-held snapshots.
 
-因为bottommost level中的sst相对比较稳定，如果在当时生成这些sst时存在某些snapshot，导致很多覆盖写的key全都保留并写入到文件中，那么这些重复的key今后很难再会被drop掉（即使当初占着它的snapshot后来被release），额外占用磁盘空间。
+因为bottommost level中的sst相对比较稳定，如果在当时生成这些sst时存在某些snapshot，导致很多kTypeDelete类型的key全都保留并写入到文件中，那么这些key今后很难再会被drop掉（即使当初占着它的snapshot后来被release），额外占用磁盘空间。
 
 为了解决这个问题，v5.9.2会在ReleaseSnapshot后主动检查一下bottommost level中哪些sst文件的largest_seq小于当前的oldest_snapshot，有的话将他们标记成需要compact。
 
@@ -89,7 +89,9 @@ void VersionStorageInfo::ComputeBottommostFilesMarkedForCompaction() {
 }
 ```
 
-逻辑也不难，重点看下这行
+逻辑也不难。补充一点，貌似这个只解决了DeleteRecord带来的额外空间占用，对于同一个key的频繁覆盖写不会主动发现并标记compact，如果要支持的话，可以在InternalKeyTablePropertiesNames中加一个item来记录覆盖写的record个数，然后在上面的if中判断一下。
+
+接下来重点看下这行
 
 ```cpp
 level_and_file.second->largest_seqno != 0
