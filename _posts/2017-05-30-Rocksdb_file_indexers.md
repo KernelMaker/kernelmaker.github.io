@@ -32,15 +32,21 @@ leveldb和rocksdb在大于0层中查找某个key，往往都是先在version中�
 有了这4个值，假设此时用户查找一个user_key，level 0全部不命中，开始在Level 1中查找，首先通过二分查找找到Level 1中找到第一个largest_key大于等于user_key的sst文件（注：如果user_key小于Level 1全局最小key，则对应第一个sst文件，如果user_key大于Level 1全局最大key，则对应最后一个文件），假设就是上图的f是在Level 1中第一个满足条件的sst文件，那么此时关于f在Level 2中对应的查找子范围，有以下5中情况：
 
 ```
-1. user_key < smallest_key: 如果f是Level 1最左文件，即index = 0，则Level 2的left_bound = 0，如果index不等于0，则left_bound等于f前一个文件，即index-1对应的文件的largest_lb，right_bound = f的smallest_rb
+1. user_key < smallest_key: 如果f是Level 1最左文件，即index = 0，则Level 2的
+left_bound = 0，如果index不等于0，则left_bound等于f前一个文件，即index-1对应的
+文件的largest_lb，right_bound = f的smallest_rb
 
-2. user_key == smallest_key: left_bound = f的smallest_lb，right_bound = f的smallest_rb
+2. user_key == smallest_key: left_bound = f的smallest_lb，
+right_bound = f的smallest_rb
 
-3. user_key > smallest_key && user_key < largest_key: left_bound = f的smallest_lb，right_bound = f的largest_rb
+3. user_key > smallest_key && user_key < largest_key: 
+left_bound = f的smallest_lb，right_bound = f的largest_rb
 
-4. user_key == largest_key: left_bound = f的largest_lb，right_bound = f的largest_rb
+4. user_key == largest_key: left_bound = f的largest_lb，
+right_bound = f的largest_rb
 
-5. user_key > largest_key: left_bound = f的largest_rb，right_bound = Level 2最右sst
+5. user_key > largest_key: left_bound = f的largest_rb，
+right_bound = Level 2最右sst
 ```
 
 这样，每次在f不命中的情况下，通过匹配上述5种情况，利用f的smallest_lb，smallest_rb，largest_rb，largest_lb算出在下一个Level进行查找的若干sst文件的left_bound和right_bound，如果f是本层范围符合可查找user_key的最后一个sst文件（注：如果user_key == f的largest_key，那么即使f没命中，也需要继续在f的下一个sst文件中进行查找，而不能直接跳到下一层），此时就可以利用刚才算出的f对应于下一层的left_bound和right_bound直接在下一个Level开始局部二分查找。
