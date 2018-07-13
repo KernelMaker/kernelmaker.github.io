@@ -332,7 +332,7 @@ Sequence(0);NumRecords(3);Noop;Put(a,1);Merge(a,1);Delete(a);
 Sequence(0);NumRecords(3);Prepare();Put(a,1);Merge(a,1);Delete(a);EndPrepare(xid)
 ```
 
-可以看到这里将之前的Noop占位换成Prepare，然后在结尾插入EndPrepare(xid)，构造好WriteBatch后就直接调用WriteImpl写WAL了。注意，此时往WAL里写的这条日志的sequence虽然比VersionSet的last_sequence大，但写入WAL之后并不会调用SetLastSequence来更新VersionSet的last_sequence，它只有在最后写入Memtable之后才更新，具体做法就是给VersionSet除了last\_sequence\_之外，再加一个last\_allocated\_sequence\_，初始相等，写WAL是加后者，后者对外不可见，commit后再加前者。所以一旦PessimisticTransactionDB使用了2PC，就要求所有都是2PC，不然last\_sequence\_可能会错乱。
+可以看到这里将之前的Noop占位换成Prepare，然后在结尾插入EndPrepare(xid)，构造好WriteBatch后就直接调用WriteImpl写WAL了。注意，此时往WAL里写的这条日志的sequence虽然比VersionSet的last_sequence大，但写入WAL之后并不会调用SetLastSequence来更新VersionSet的last_sequence，它只有在最后写入Memtable之后才更新，具体做法就是给VersionSet除了last\_sequence\_之外，再加一个last\_allocated\_sequence\_，初始相等，写WAL是加后者，后者对外不可见，commit后再加前者。~~所以一旦PessimisticTransactionDB使用了2PC，就要求所有都是2PC，不然last\_sequence\_可能会错乱~~（更正：如果使用two\_write\_queues\_，不管是Prepare -> Commit还是直接Commit，sequence的增长都是以last\_allocated\_sequence\_为准，最后用它来调整last\_sequence\_；如果不使用two\_write\_queues\_则直接以last\_sequence\_为准，总之不会出现sequence混错，所以可以Prepare -> Commit和Commit混用）。
 
 WAL写完之后，即使没有commit就宕机也没事，重启后Recovery会将事务从WAL恢复记录到全局recovered_transaction中，等待Commit
 
