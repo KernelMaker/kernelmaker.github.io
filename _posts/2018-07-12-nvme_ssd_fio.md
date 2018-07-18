@@ -43,12 +43,12 @@ BandWidth、IOPS、Latency需要分开测试，各跑出其极限值，因为他
 
 **IOPS在EXT4上比较特殊，根据测试文件（100G）之前是如何生成的，会有不同的结果，如下：**
 
-| IOPS             | 文件之前不存在 | 文件提前用dd生成（bs=128M，count=1000） | 文件提前用fio生成（bs=4k，rw=randwrite） | 文件提前用fio生成（bs=4k，rw=write） |
-| ---------------- | -------------- | --------------------------------------- | ---------------------------------------- | ------------------------------------ |
-| Sequential Write | 101K           | 【227K】                                | 94K                                      | 101K                                 |
-| Random Write     | 60K            | 【216K】                                | 60K                                      | 73K                                  |
-| Sequential Read  | 277K           | 269K                                    | 【426K】                                 | 【446K】                             |
-| Random Read      | 270K           | 265K                                    | 276K                                     | 【404K】                             |
+| IOPS             | 文件之前不存在 | 文件提前用dd生成（bs=128M，count=1000） |
+| ---------------- | -------------- | --------------------------------------- |
+| Sequential Write | 101K           | 227K                                    |
+| Random Write     | 60K            | 216K                                    |
+| Sequential Read  | 277K           | 269K                                    |
+| Random Read      | 270K           | 265K                                    |
 
 
 
@@ -56,10 +56,7 @@ BandWidth、IOPS、Latency需要分开测试，各跑出其极限值，因为他
 
 1. 无论裸盘还是EXT4，Write BandWidth整体比Read BandWidth少
 2. 无论裸盘还是EXT4，Random Read的Latency相比其他Latency高很多
-3. EXT4上各种操作的IOPS的峰值取决于文件之前是怎么生成的
-4. Random Read的IOPS只有在文件是bs=4的顺序写入生成时才能达到最高（404K）
-5. Sequential Read的IOPS在文件是bs=4，无论随机或是顺序写入生成的，都比较高（426K、446K）
-6. Sequential Write和Random Write的IOPS在文件是bs=128M，顺序写入生成时，比较高（227K、216K）
+3. 在ETX4上，如果文件之前不存在，则Write IOPS相比裸盘低很多，通过顺序写先生成文件后，IOPS基本和裸盘一样
 
 
 
