@@ -124,7 +124,7 @@ current_file_lsn同样是不断增加并且不回环的，它是redo log实际�
 
 具体代码就不展开了，只要知道图中5个变量的含义，redo log文件组织，偏移量转换的代码就很容易看了
 
-
+**【注】：**上面为了表述简单，实际current_file_lsn和current_file_real_offset以及current_file_end_offset并不是每次写入都更新，而是只在每次切换文件的时候更新，当文件未发生切换时，current_file_lsn和current_file_real_offset一一对应，代表该文件的起始lsn和real_offset，然后每次写入是通过将要写入的lsn与二者进行比较计算便可以算出要写入的real_offset完成写入，当要写入的offset大于current_file_end_offset则进行文件切换。
 
 ## 4. 并发写入
 
