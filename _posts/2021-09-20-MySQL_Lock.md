@@ -52,7 +52,7 @@ lock的mode主要有Share(S)和Exclusive(X)*【代码中对应LOCK_S和LOCK_X】
 
 lock的gap mode主要有Record lock, Gap lock, Next-key lock*【代码中对应LOCK_REC_NOT_GAP, LOCK_GAP, LOCK_ORDINARY】*
 
-在具体使用中将 mode|gap_mode 之后就是一个lock的实际类型，Record lock是作用在单个record上的记录锁，Gap lock/Next-key lock虽然也是加在某个具体record上，但作用是为了确保record前面的gap不要有其他并发事务插入，这个具体是怎么实现呢，InnoDB引入了一个插入意向锁，他的实际类型是LOCK_X | LOCK_GAP | LOCK_INSERT_INTENTION，与Gap lock/Next-key lock互斥，如果要插入前检测到插入位置的next record上有lock，则会尝试对这个next record加一个插入意向锁，代表本事务打算给这个gap里插一个新record，看行不行？如果已经有别的事务给这里上了Gap/Next-key lock，代表它想保护这里，所以当前插入意向锁需要等待相关事务提交才行。这个检测只是单向的，即插入意向锁需等待Gap/Next-key lock释放，而任何锁不用等待插入意向锁释放，否则严重影响这个gap中不冲突的Insert操作并发。
+在具体使用中将 `mode|gap_mode` 之后就是一个lock的实际类型，Record lock是作用在单个record上的记录锁，Gap lock/Next-key lock虽然也是加在某个具体record上，但作用是为了确保record前面的gap不要有其他并发事务插入，这个具体是怎么实现呢，InnoDB引入了一个插入意向锁，他的实际类型是`LOCK_X | LOCK_GAP | LOCK_INSERT_INTENTION`，与Gap lock/Next-key lock互斥，如果要插入前检测到插入位置的next record上有lock，则会尝试对这个next record加一个插入意向锁，代表本事务打算给这个gap里插一个新record，看行不行？如果已经有别的事务给这里上了Gap/Next-key lock，代表它想保护这里，所以当前插入意向锁需要等待相关事务提交才行。这个检测只是单向的，即插入意向锁需等待Gap/Next-key lock释放，而任何锁不用等待插入意向锁释放，否则严重影响这个gap中不冲突的Insert操作并发。
 
 具体的锁冲突检测在lock_rec_has_to_wait函数中，大体原则就是：判断两个lock兼容还是不兼容，首先先做mode的冲突检测
 
@@ -125,7 +125,7 @@ Insert的顺序是先插入主键索引，再依次插入二级索引。以下�
    
 3. 如果是INSERT ON DUPLICATE KEY UPDATE 并且 当前index是unique，则给其下一个record **X Gap lock**，保护不会被其他事务插入相同的entry 
 
-4. 判断record的下一个record上当前有没有锁，如果有的话，则给其加插入意向锁（LOCK_X | LOCK_GAP | LOCK_INSERT_INTENTION），确保要插入entry的区间没有其他Gap lock/Next-key lock保护
+4. 判断record的下一个record上当前有没有锁，如果有的话，则给其加插入意向锁`（LOCK_X | LOCK_GAP | LOCK_INSERT_INTENTION）`，确保要插入entry的区间没有其他Gap lock/Next-key lock保护
 
 5. 插入entry
 
