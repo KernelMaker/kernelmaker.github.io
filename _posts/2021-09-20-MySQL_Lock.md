@@ -170,7 +170,7 @@ lock_rec_insert_check_and_lock
 
 
 
-## Select 加锁流程
+## 4. Select 加锁流程
 
 SELECT做当前读的加锁流程就在**row_search_mvcc**当中，一条SELECT语句会多次进入这个函数，第一次是通过index_read->row_search_mvcc进来，一般是首次访问index，取找WHERE里的exact record，之后每次再通过general_fetch->row_search_mvcc进来，根据具体条件遍历prev/next record，直到把满足WHRER条件的record都取出来。具体的加锁也就是在访问和遍历record的过程中进行，row_search_mvcc代码很长，这里我只提炼总结下加锁相关的流程：
 
@@ -195,12 +195,13 @@ SELECT做当前读的加锁流程就在**row_search_mvcc**当中，一条SELECT�
 其他的流程也就没什么了：
 
 1. 对于遍历到的满足条件的record，基本默认都是加Next-key lock
-2. 对于某些特殊的场景，会将某些Next-key lock降级成Rec lock（步骤5）
-3. 还有一些特殊场景，会只加Gap lock（步骤2、4）
+2. 二级索引回表时只会对主键加Rec lock
+3. 对于某些特殊的场景，会将某些Next-key lock降级成Rec lock（步骤5）
+4. 还有一些特殊场景，会只加Gap lock（步骤2、4）
 
 
 
-## 总结
+## 5. 总结
 
 以上基本就是InnoDB加事务锁的相关流程，Insert和Select的加锁流程配合着看，事务锁的原则及实现基本也就出来了。
 
