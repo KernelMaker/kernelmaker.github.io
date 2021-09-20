@@ -46,7 +46,7 @@ latch是存在bufferpool对应page的block中，对应block->lock
 
 ## 3. Insert加锁流程
 
-###3.1 lock mode
+### 3.1 lock mode
 
 lock的mode主要有Share(S)和Exclusive(X)*【代码中对应LOCK_S和LOCK_X】*
 
