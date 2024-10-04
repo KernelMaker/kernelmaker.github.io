@@ -1,7 +1,7 @@
 plugins:
   - jekyll-feed
 title: Zhao Song's Blog
-author: songzhao.asm@icloud.com
+author: Zhao Song
 description: Database internals
 
 highlighter: null
