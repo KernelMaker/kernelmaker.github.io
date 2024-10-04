@@ -1,3 +1,5 @@
+plugins:
+  - jekyll-feed
 title: Zhao Song's Blog
 author: songzhao.asm@icloud.com
 description: Database internals
