@@ -1,25 +1,21 @@
----
----
-<?xml version="1.0"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>{{ site.data.kernelmaker.name }}</title>
-    <link>{{ site.url }}</link>
-    <atom:link href="{{ site.url }}{{ site.baseurl }}/feed.xml" rel="self" type="application/rss+xml" />
-    <description>{{ site.data.kernelmaker.description }}</description>
+    <title>Zhao Song's blog</title>
+    <link>https://kernelmaker.github.io/</link>
+    <description>Database internals</description>
     <language>en-us</language>
-    <pubDate>{{ site.time | date: "%a, %d %b %Y %H:%M:%S %z" }}</pubDate>
-    <lastBuildDate>{{ site.time | date: "%a, %d %b %Y %H:%M:%S %z" }}</lastBuildDate>
+    <lastBuildDate>{{ site.time | date_to_rfc822 }}</lastBuildDate>
+    <atom:link href="{{ site.url }}/feed.xml" rel="self" type="application/rss+xml" />
 
-    {% for post in site.posts limit: 10 %}
-      <item>
-        <title>{{ post.title }}</title>
-        <link>{{ site.url }}{{ site.baseurl }}{{ post.url }}</link>
-        <pubDate>{{ post.date | date: "%a, %d %b %Y %H:%M:%S %z" }}</pubDate>
-        <author>{{ site.data.kernelmaker.author}}</author>
-        <description>{{ post.content | xml_escape }}</description>
-      </item>
+    {% for post in site.posts %}
+    <item>
+      <title>{{ post.title }}</title>
+      <link>{{ site.url }}{{ post.url }}</link>
+      <guid isPermaLink="true">{{ site.url }}{{ post.url }}</guid>
+      <description>{{ post.excerpt | xml_escape }}</description>
+      <pubDate>{{ post.date | date_to_rfc822 }}</pubDate>
+    </item>
     {% endfor %}
-
   </channel>
 </rss>

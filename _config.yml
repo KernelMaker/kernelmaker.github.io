@@ -1,11 +1,11 @@
-title: Meow
-author: KernelMaker
-description: Meow~.
+title: Zhao Song's Blog
+author: songzhao.asm@icloud.com
+description: Database internals
 
 highlighter: null
 permalink: /:title
 
-url:
+url: "https://kernelmaker.github.io"
 baseurl:
 
 sass:
