@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Reviewing the Internals of MariaDB’s Vector Index - 2
+title: Reviewing the Internals of MariaDB’s Vector Index 2
 ---
 
 
