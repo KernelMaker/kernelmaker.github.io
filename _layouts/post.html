@@ -2,10 +2,22 @@
 layout: default
 ---
 
-<article class="single row gutters">
-  <time class="published" datetime="{{ page.date | date: '%Y-%m-%d' }}">{{ page.date | date_to_long_string }}</time>
-  <h2>{{ page.title }}</h2>
+<article class="post-single">
+  <header class="post-header">
+    <a href="{{ site.baseurl }}/" class="back-link">&larr; Back to Home</a>
+    <h1 class="post-title">{{ page.title }}</h1>
+    <div class="post-meta">
+      <time class="published" datetime="{{ page.date | date: '%Y-%m-%d' }}">{{ page.date | date_to_long_string }}</time>
+    </div>
+  </header>
 
-  {{ content }}
+  <div class="post-content">
+    {{ content }}
+  </div>
+
+  <footer class="post-footer">
+    <a href="{{ site.baseurl }}/" class="back-link">&larr; Back to all posts</a>
+  </footer>
+
   {% include disqus_comment.html %}
 </article>
