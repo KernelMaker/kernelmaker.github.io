@@ -70,8 +70,8 @@ code {
   font-size: .8rem;
 }
 
-p code {
-  padding: 0px 5px;
+:not(pre) > code {
+  padding: 2px 5px;
   border: 1px solid #ddd;
   background-color: #f8f8f8;
   border-radius: 3px;
