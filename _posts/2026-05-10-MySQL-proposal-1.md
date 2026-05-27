@@ -3,6 +3,12 @@ layout: post
 title: InnoDB B+Tree Performance Optimization Proposal - Insert Path Improvements and Concurrent Split Handling
 ---
 
+I presented this proposal at Oracle’s [MySQL Contributor Summit](https://github.com/mysql/mysql-community/wiki/MySQL-Contributor-Summit-2026-%E2%80%90-Proposed-Agenda) on May 26. It focuses on optimizing the InnoDB B+Tree insert path, especially structure modification operations (SMOs), by introducing a B-link-style split protocol.
+
+This blog post summarizes the main ideas behind the proposal, including the current bottlenecks, the high-level design, several low-level InnoDB integration challenges, and benchmark results from my PoC based on MySQL 9.7.0.
+
+
+
 ## 1. Bottlenecks in InnoDB B+Tree Inserts
 
 The current InnoDB B+Tree index insert path has three major performance bottlenecks:
@@ -34,11 +40,7 @@ To optimize these issues, in principle we need:
 2. Pessimistic insert should no longer hold `SX(dict_index_t::lock)`. It should only need `S(dict_index_t::lock)`, so that SMO operations can run in parallel.
 3. SMO should not pre-lock the whole affected subtree. The latch granularity should be reduced. The split should proceed bottom-up, one level at a time: latch, split, and release. This allows the subtree being modified by SMO to remain readable and writable as much as possible.
 
-Combining these three points, we can borrow ideas from B-link Trees:
-
-https://www.csd.uoc.gr/~hy460/pdf/p650-lehman.pdf
-
-and perform a more complete redesign.
+Combining these three points, we can borrow ideas from [B-link Trees](https://www.csd.uoc.gr/~hy460/pdf/p650-lehman.pdf) and perform a more complete redesign.
 
 ## 2. High-Level Design
 
@@ -91,22 +93,55 @@ After descent completes, the operation holds the latch on the target page, and a
 
 With this design, we can effectively address the three bottlenecks described above.
 
-I implemented a PoC on MySQL 9.7.0. In a carefully constructed workload with 32 concurrent insert threads that triggers a large number of concurrent page splits — almost every insert event triggers a leaf split — the comparison is:
+### 4. Benchmark results
 
-| Version           | TPS       | Avg latency | P95 latency |
-| ----------------- | --------- | ----------- | ----------- |
-| MySQL 9.7.0       | 5,666.22  | 5.65 ms     | 17.01 ms    |
-| Optimized version | 91,523.92 | 0.35 ms     | 0.40 ms     |
+I implemented a PoC based on MySQL 9.7.0 and ran several benchmarks to evaluate the effect of the new protocol.
 
-This is a 16.2x improvement in TPS, a 16.1x reduction in average latency, and a 42.5x reduction in P95 latency.
+**1. Split-heavy insert workload**
 
-I also collected `perf` samples on the optimized version. The hotspot has shifted from index-lock contention to redo log commit wait. In particular, `log_wait_for_write` accounts for about 40% of the samples.
+The first benchmark is a deliberately constructed split-heavy insert workload.
 
+Before the measured phase, I preloaded 2.5 million rows into the table. Each row is about 2.5 KB, so after the preload phase, most leaf pages were already close to the split threshold.
+
+Then, during the measured phase, the benchmark inserted 400,000 additional rows. These rows were evenly distributed across the table, triggering a large number of page splits.
+
+| Version           |       TPS | Avg latency | P95 latency |
+| ----------------- | --------: | ----------: | ----------: |
+| MySQL 9.7.0       |  5,666.22 |     5.65 ms |    17.01 ms |
+| Optimized version | 91,523.92 |     0.35 ms |     0.40 ms |
+
+The optimized version achieved about **16.2x higher TPS**, **16.1x lower average latency**, and **42.5x lower P95 latency**.
+
+I also collected `perf` samples on the optimized version. The hotspot shifted from index-lock contention to redo log commit wait. In particular, `log_wait_for_write` accounts for about 40% of the samples. This indicates that SMO concurrency inside the B-link-style protocol is no longer the bottleneck.
 <img src="/public/images/2026-05-10/1.png" alt="image-1"/>
 
 <img src="/public/images/2026-05-10/2.png" alt="image-2"/>
 
-This indicates that SMO concurrency inside the B-link-style protocol is no longer the bottleneck.
+**2. sysbench `oltp_insert`**
+
+I also tested the standard sysbench `oltp_insert` workload.
+
+This is not a split-heavy workload because the rows are small, but the optimized version still shows clear improvements.
+
+With `auto_inc = ON` , inserts concentrate on the rightmost part of the B+Tree. This creates an insert hotspot. The optimized version benefits mainly from the reduced latch scope around the hotspot.
+
+| Version           |     TPS | P95 latency |
+| ----------------- | ------: | ----------: |
+| MySQL 9.7.0       |  80,223 |     1.64 ms |
+| Optimized version | 104,776 |     0.90 ms |
+
+The optimized version achieved about **30.6% higher TPS** and **45.1% lower P95 latency**.
+
+With `auto_inc = OFF` , inserts are more evenly distributed across the B+Tree. In this case, the optimized version benefits more from parallel SMOs.
+
+| Version           |     TPS | P95 latency |
+| ----------------- | ------: | ----------: |
+| MySQL 9.7.0       | 194,912 |     0.19 ms |
+| Optimized version | 245,161 |     0.19 ms |
+
+The optimized version achieved about **25.8% higher TPS**, with no P95 latency regression.
+
+Overall, these benchmarks show that the B-link-style protocol improves not only artificially split-heavy workloads, but also standard insert workloads.
 
 The improvement is significant, so I believe this proposal is worth further investigation.
 
@@ -217,6 +252,12 @@ This is a difficult issue, and I do not currently have a perfect solution. The m
 
    Second, if `alloc_mtr` commits early and the later operation fails, the newly allocated page cannot be returned to FSP easily.
 
+3. Using an up-locking order is not a clean solution. In this protocol, clearing the child page’s `INCOMPLETE_SPLIT` flag and inserting the new page’s `node_ptr` into the parent must be atomic with respect to crash recovery and concurrent access. This means the mtr that installs the parent `node_ptr` still needs to reacquire and modify the child page at the end.
+
+   In other words, even if we try to use an up-locking order to propagate the split to the parent, the final step still requires a parent-to-child latch order. This brings us back to a down-locking pattern.
+
+   Also, even if we could make this ordering work, the root page’s SX latch would still be held longer than necessary, which would again limit parallel SMOs.
+
 Since this is not the main topic of the proposal, my current PoC uses a temporary solution: a B-link allocator thread.
 
 The allocator thread pre-allocates pages from FSP into a pool. The pool stores page numbers only.
@@ -268,17 +309,22 @@ The high key and right-link can still route the operation to the correct target 
 A complete solution can be implemented in multiple ways, such as runtime repair, or maintaining page numbers of dirty pages that still have `PAGE_INCOMPLETE_SPLIT` set at flush time.
 
 
-I implemented a PoC on MySQL 9.7.0 and constructed a workload with severe concurrent splits caused by concurrent inserts.
 
-The workload first loads 2.5 million initial rows, trying to make most leaf pages close to the split boundary. Then it runs 32 concurrent threads to insert 400,000 randomized new rows, triggering a large number of leaf splits.
+## 5. Summary and Next Steps
 
-The final comparison is very good:
+This is a large proposal. It involves major changes to several core InnoDB modules, so the implementation is definitely challenging.
 
-- The 400,000 inserts take 70 seconds on MySQL 9.7.0.
-- The optimized version finishes in only 4 seconds.
-- TPS improves by 16x.
-- P95 latency decreases from 17.01 ms in MySQL 9.7.0 to 0.40 ms in the optimized version, a 42x improvement.
+Also, this proposal only covers the split path. Merge support will be needed in the future. I plan to describe the merge design in a separate follow-up proposal, or as an extension of this one.
 
-This proposal is large. It involves major changes to core InnoDB modules and is challenging. Also, this is only the split part. Merge support will definitely be needed later. I plan to put the merge design into a separate follow-up proposal, or as an extension of this proposal.
+That said, I think the full patch can be delivered incrementally.
 
-However, the PoC at least proves the feasibility of this direction and shows significant potential benefits.
+For V1, we can focus only on parallel page splits and fall back to the existing serialized behavior for page merges. For example, we can introduce a new SMO lock to make splits and merges mutually exclusive:
+
+```text
+Split: S(index->lock) + S(index->smo_lock)
+Merge: S(index->lock) + X(index->smo_lock)
+```
+
+In this way, multiple splits can run in parallel, while merges still take exclusive access through `index->smo_lock` and follow the existing InnoDB behavior.
+
+The PoC shows that this direction is feasible and has significant performance potential, so I believe it is definitely worth exploring further.
