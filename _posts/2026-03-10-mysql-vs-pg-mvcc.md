@@ -40,7 +40,7 @@ In the following sections, I will compare their implementations in detail across
 
 ## PostgreSQL
 
-## In PostgreSQL, a tuple and all its historical versions reside in the heap, as shown below:
+In PostgreSQL, a tuple and all its historical versions reside in the heap, as shown below:
 
 <img src="/public/images/2026-03-10/3.png" alt="image-3"/>
 
