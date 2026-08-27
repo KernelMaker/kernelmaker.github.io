@@ -1,31 +1,28 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     {% include head.html %}
   </head>
   <body>
-    <div class="container azul">
+    <div class="shell">
       <header class="site-header">
-        <a href="{{ site.url }}" id="logo" title="{{ site.title }}"
-           style="background-image: url({{site.baseurl}}/public/images/logo.jpeg);"></a>
-        <div class="header-text">
-          <h1 class="site-title">{{ site.title }}</h1>
-          <p class="site-tagline">{{ site.description }}</p>
+        <div class="site-brand">
+          <a href="{{ site.baseurl }}/" class="site-logo" title="{{ site.title }}"
+             style="background-image: url({{site.baseurl}}/public/images/logo.jpeg);"></a>
+          <div>
+            {% if page.title == "Home" %}
+            <h1 class="site-name"><a href="{{ site.baseurl }}/">{{ site.title }}</a></h1>
+            {% else %}
+            <p class="site-name"><a href="{{ site.baseurl }}/">{{ site.title }}</a></p>
+            {% endif %}
+            <p class="site-sub">{{ site.description | upcase }}</p>
+          </div>
         </div>
         {% include navigation.html %}
       </header>
 
       {{ content }}
     </div>
-
-    <!-- scripts -->
-    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
-    <script src="{{site.baseurl}}/public/js/jquery.fitvids.js"></script>
-    <script>
-      $(document).ready(function(){
-        $("article").fitVids();
-      });
-    </script>
     {% include google_analytics.html %}
   </body>
 </html>

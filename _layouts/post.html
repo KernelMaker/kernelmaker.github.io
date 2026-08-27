@@ -2,22 +2,106 @@
 layout: default
 ---
 
+{% assign total = site.posts | size %}
+{% for p in site.posts %}{% if p.url == page.url %}{% assign num = total | minus: forloop.index0 %}{% endif %}{% endfor %}
+{% capture padded %}{{ num | prepend: '000' }}{% endcapture %}
 <article class="post-single">
+  <span class="post-kicker">&#8470; {{ padded | slice: -3, 3 }}</span>
   <header class="post-header">
-    <a href="{{ site.baseurl }}/" class="back-link">&larr; Back to Home</a>
     <h1 class="post-title">{{ page.title }}</h1>
     <div class="post-meta">
-      <time class="published" datetime="{{ page.date | date: '%Y-%m-%d' }}">{{ page.date | date_to_long_string }}</time>
+      <time class="published" datetime="{{ page.date | date: '%Y-%m-%d' }}">{{ page.date | date: '%B %-d, %Y' }}</time>
     </div>
   </header>
+
+  <details class="toc-inline">
+    <summary>Contents</summary>
+    <div class="toc-list"></div>
+  </details>
 
   <div class="post-content">
     {{ content }}
   </div>
 
   <footer class="post-footer">
-    <a href="{{ site.baseurl }}/" class="back-link">&larr; Back to all posts</a>
+    <a href="{{ site.baseurl }}/" class="back-link">&larr; All posts</a>
   </footer>
 
   {% include disqus_comment.html %}
 </article>
+
+<aside class="toc-side">
+  <div class="toc-title">Contents</div>
+  <div class="toc-list"></div>
+</aside>
+
+<script>
+(function () {
+  var content = document.querySelector('.post-content');
+  if (!content) return;
+  var heads = Array.prototype.slice.call(content.querySelectorAll('h1, h2, h3'));
+  if (heads.length < 2) return;
+
+  var lists = document.querySelectorAll('.toc-list');
+  // depth = rank of the heading level among the distinct levels this post
+  // uses, so h1/h2, h2/h3, and even gapped h1/h3 posts all indent correctly
+  var lvls = heads.map(function (h) { return +h.tagName[1]; });
+  var uniq = lvls.filter(function (l, i, a) { return a.indexOf(l) === i; }).sort();
+  var depths = lvls.map(function (l) { return Math.min(uniq.indexOf(l), 2); });
+  heads.forEach(function (h, i) {
+    h.id = h.id || 's-' + i;
+  });
+  lists.forEach(function (list) {
+    heads.forEach(function (h, i) {
+      var a = document.createElement('a');
+      a.href = '#' + h.id;
+      a.textContent = h.textContent;
+      a.className = 't' + (2 + depths[i]);
+      // entries with a long code identifier fill lines instead of
+      // dropping the whole token to the next line
+      if (/\S{22,}/.test(h.textContent)) a.className += ' bw';
+      a.setAttribute('data-i', i);
+      // scroll without pushing a history entry, so Back leaves the page
+      a.addEventListener('click', function (e) {
+        e.preventDefault();
+        h.scrollIntoView();
+        history.replaceState(null, '', '#' + h.id);
+      });
+      list.appendChild(a);
+    });
+  });
+  document.querySelector('.toc-inline').classList.add('ready');
+  document.querySelector('.toc-side').classList.add('ready');
+
+  var links = document.querySelectorAll('.toc-side .toc-list a');
+  var ticking = false;
+  function spy() {
+    ticking = false;
+    var current = 0;
+    for (var i = 0; i < heads.length; i++) {
+      if (heads[i].getBoundingClientRect().top <= 130) current = i;
+      else break;
+    }
+    // find enclosing top-level section
+    var parent = current;
+    while (parent > 0 && depths[parent] > 0) parent--;
+    links.forEach(function (a) {
+      var i = +a.getAttribute('data-i');
+      a.classList.toggle('active', i === current);
+      a.classList.toggle('active-parent', i === parent && parent !== current);
+    });
+    var act = document.querySelector('.toc-side a.active');
+    if (act) {
+      var box = document.querySelector('.toc-side');
+      var r = act.getBoundingClientRect(), b = box.getBoundingClientRect();
+      if (r.top < b.top + 20 || r.bottom > b.bottom - 20) {
+        box.scrollTop += r.top - b.top - b.height / 2;
+      }
+    }
+  }
+  window.addEventListener('scroll', function () {
+    if (!ticking) { ticking = true; requestAnimationFrame(spy); }
+  }, { passive: true });
+  spy();
+})();
+</script>

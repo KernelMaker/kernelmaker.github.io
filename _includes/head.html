@@ -6,26 +6,29 @@
 <meta name="author" content="{{ site.author }}">
 
 <!-- Enable responsiveness on mobile devices-->
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <!-- title -->
-<title>{{ page.title }} &middot; {{ site.data.brume.name }}</title>
+<title>{% if page.title and page.title != "Home" %}{{ page.title }} &middot; {% endif %}{{ site.title }}</title>
 
 <!-- icons -->
 <link rel="shortcut icon" href="{{site.baseurl}}/public/images/favicon.ico" />
 
+<!-- fonts (self-hosted) -->
+<link rel="preload" href="{{site.baseurl}}/public/fonts/ibm-plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="{{site.baseurl}}/public/fonts/ibm-plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+
 <!-- stylesheets -->
-<link rel="stylesheet" href="{{site.baseurl}}/public/css/responsive.gs.12col.css">
-<link rel="stylesheet" href="{{site.baseurl}}/public/css/animate.min.css">
 <link rel="stylesheet" href="{{site.baseurl}}/public/css/main.css">
 
-<!-- Google fonts -->
-<link rel="stylesheet" href="//fonts.googleapis.com/css?family=Source+Sans+Pro:400,700,400italic&subset=latin-ext">
-
-{% if site.paginate %}
-<!-- font Awesome -->
-<link href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" rel="stylesheet">
-{% endif %}
-
 <!-- feed links -->
-<link rel="alternate" href="{{ site.url }}{{ site.baseurl }}/feed.xml" type="application/rss+xml" title="{{ site.name }}">
+<link rel="alternate" href="{{ site.url }}{{ site.baseurl }}/feed.xml" type="application/rss+xml" title="{{ site.title }}">
+
+<!-- social sharing -->
+<meta property="og:site_name" content="{{ site.title | escape }}">
+<meta property="og:title" content="{% if page.title and page.title != 'Home' %}{{ page.title | escape }}{% else %}{{ site.title | escape }}{% endif %}">
+<meta property="og:description" content="{% if page.title == 'Home' %}{{ site.description | escape }}{% else %}{{ page.content | strip_html | strip_newlines | truncate: 160 | escape }}{% endif %}">
+<meta property="og:url" content="{{ site.url }}{{ site.baseurl }}{{ page.url }}">
+<meta property="og:type" content="{% if page.layout == 'post' %}article{% else %}website{% endif %}">
+<meta property="og:image" content="{{ site.url }}{{ site.baseurl }}/public/images/logo.jpeg">
+<meta name="twitter:card" content="summary">

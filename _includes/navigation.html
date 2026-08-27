@@ -1,6 +1,6 @@
-<nav class="top-navbar">
+<nav class="site-nav">
   {% for link in site.data.links %}
   <a href="{{ link.url }}" title="{{ link.title }}"
-  {% if page.title == link.title %}class="current-page"{% endif %} {% if link.title == 'Github' %} target="_blank" {% endif %}>{{ link.title }}</a>
+  {% if page.title == link.title %}class="current-page"{% elsif link.url == '/' and page.layout == 'post' %}class="current-page"{% endif %} {% if link.title == 'Github' %} target="_blank" rel="noopener"{% endif %}>{{ link.title }}</a>
   {% endfor %}
 </nav>
