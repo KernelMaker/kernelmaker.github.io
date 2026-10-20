@@ -1,6 +1,6 @@
 ---
 layout: post
-title: MySQL vs PostgreSQL Internals (Part 2) — MVCC (Multi-version Concurrency Control)
+title: MySQL vs PostgreSQL Internals (Part 2) -- MVCC (Multi-version Concurrency Control)
 ---
 
 In the previous [post](https://kernelmaker.github.io/mysql-vs-pg-bufferpool), I took a detailed look at how MySQL and PostgreSQL differ in their buffer pool design and implementation. In this post, I will continue with a detailed comparison of their MVCC implementations.
